@@ -25,6 +25,7 @@ type Meme struct {
 	Border float64
 }
 
+//TextBox represents a text box to add to the image.
 type TextBox struct {
 	// Text to write in the textbox
 	Txt *string
@@ -36,20 +37,37 @@ type TextBox struct {
 	Center image.Point
 	// Path to the font
 	FontPath string
-	// Maximum font size
-	MaxFontSize float64
 	// Line spacing (fraction of the fontsize)
 	LineSpacingRatio float64
+	// the actual font size.
+	FontSize float64
 }
 
-func (t *TextBox) FontSize() (float64, error) {
-	// TODO: make this part of the struct?
-	minFontSize := 8.0
+func NewTextBox(text string, w int, h int, center image.Point, fontPath string, maxFontSize float64, minFontSize float64, lineSpacing float64) (*TextBox, error) {
+	t := TextBox{
+		Txt:              &text,
+		Width:            w,
+		Height:           h,
+		Center:           center,
+		FontPath:         fontPath,
+		LineSpacingRatio: lineSpacing,
+	}
+	fs, err := t.CalculateFontSize(maxFontSize, minFontSize)
+	if err != nil {
+		return nil, err
+	}
+	t.FontSize = fs
+	return &t, nil
+}
+
+// CalculateFontSize calculates the maximum font size that can fit
+// the text in the textbox.
+func (t *TextBox) CalculateFontSize(maxFontSize float64, minFontSize float64) (float64, error) {
 	if t.Height <= 0 || t.Width <= 0 {
 		return 0.0, fmt.Errorf("image size is too small")
 	}
 	ctx := gg.NewContext(t.Width, t.Height)
-	for fs := t.MaxFontSize; fs >= minFontSize; fs -= 2.0 {
+	for fs := maxFontSize; fs >= minFontSize; fs -= 2.0 {
 		err := ctx.LoadFontFace(t.FontPath, fs)
 		if err != nil {
 			return 0.0, fmt.Errorf("font at %s could not be loaded at font size %d", t.FontPath, int(fs))
@@ -63,6 +81,31 @@ func (t *TextBox) FontSize() (float64, error) {
 		}
 	}
 	return 0.0, fmt.Errorf("text can't fit in the image")
+}
+
+// DrawText draws the text into a gg context
+func (t *TextBox) DrawText(ctx *gg.Context) error {
+	if *t.Txt == "" {
+		return fmt.Errorf("trying to draw an empty string.")
+	}
+	// Stroke size needs to be 40% of the line spacing.
+	lineSpacing := math.Ceil(ctx.FontHeight() * t.LineSpacingRatio)
+	strokeSize := int(lineSpacing * 0.4)
+	// Write the text with a white fill and black stroke.
+	// Inspired by the meme.go example in gg
+	ctx.SetHexColor("#000")
+	for dy := -strokeSize; dy <= strokeSize; dy++ {
+		for dx := -strokeSize; dx <= strokeSize; dx++ {
+			// Round corners (x^2 + y2 < r^2)
+			if dx*dx+dy*dy >= strokeSize*strokeSize {
+				continue
+			}
+			ctx.DrawStringAnchored(*t.Txt, float64(t.Center.X+dx), float64(t.Center.Y+dy), 0.5, 0.5)
+		}
+	}
+	ctx.SetHexColor("#FFF")
+	ctx.DrawStringAnchored(*t.Txt, float64(t.Center.X), float64(t.Center.Y), 0.5, 0.5)
+	return nil
 }
 
 // MemeFromFile initiates a meme from a gif
@@ -79,6 +122,7 @@ func MemeFromFile(path string, top string, bottom string, fontPath string) (*Mem
 	// TODO: get these from config
 	border := 0.01
 	maxFontSize := 52.0
+	minFontSize := 8.0
 	lineSpacing := 0.2
 	// Now generate the textboxes
 	size := g.Image[0].Bounds()
@@ -88,10 +132,17 @@ func MemeFromFile(path string, top string, bottom string, fontPath string) (*Mem
 	height := imgHeight * (1.0/3.0 - border)
 	X := int(imgWidth * 0.5)
 	Y := int(imgHeight*border + height*0.5)
-	topBox := TextBox{&top, int(width), int(height), image.Point{X, Y}, fontPath, maxFontSize, lineSpacing}
-	Y = int(imgHeight - imgHeight*border - height*0.5)
-	bottomBox := TextBox{&bottom, int(width), int(height), image.Point{X, Y}, fontPath, maxFontSize, lineSpacing}
-	return &Meme{g, &topBox, &bottomBox, border}, nil
+	c := image.Point{X, Y}
+	topBox, err := NewTextBox(top, int(width), int(height), c, fontPath, maxFontSize, minFontSize, lineSpacing)
+	if err != nil {
+		return nil, err
+	}
+	c.Y = int(imgHeight - imgHeight*border - height*0.5)
+	bottomBox, err := NewTextBox(bottom, int(width), int(height), c, fontPath, maxFontSize, minFontSize, lineSpacing)
+	if err != nil {
+		return nil, err
+	}
+	return &Meme{g, topBox, bottomBox, border}, nil
 }
 
 // GifMetaData returns metadata on the gif
@@ -132,67 +183,40 @@ func (m *Meme) NormalizeImage() {
 
 // Generate modifies the image adding the meme text
 func (m *Meme) Generate() error {
+	// We normalize the image as I'm not sure how drawing only on a fraction of the full gif would work.
+	// This might be revisited later for more space-efficient generated gifs
 	m.NormalizeImage()
-	size := m.Gif.Image[0].Bounds()
-	// Decide the text size. The text can be wrapped, but it must fit the bottom 1/3rd of the image, with a  border.
-	// Please note we do so here to avoid reiterating the calculation for every frame
-	fontSize, err := m.Top.FontSize()
-	if err != nil {
-		return err
-	}
-	bottomFontSize, err := m.Bottom.FontSize()
-	if err != nil {
-		return err
-	}
 	// process every frame in a goroutine
 	var wg sync.WaitGroup
 	var mux sync.Mutex
 	for i, img := range m.Gif.Image {
 		wg.Add(1)
-		go func(i int, img *image.Paletted) {
-
-			// Build a GG context, and load the font face
-			ctx := gg.NewContext(size.Dx(), size.Dy())
-			ctx.DrawImage(img, 0, 0)
-			if *m.Top.Txt != "" {
-				ctx.LoadFontFace(m.Top.FontPath, fontSize)
-				m.drawText(ctx, m.Top)
-			}
-			if *m.Bottom.Txt != "" {
-				ctx.LoadFontFace(m.Bottom.FontPath, bottomFontSize)
-				m.drawText(ctx, m.Bottom)
-			}
-			// Now we need to get a palettedimage back
-			paletted := image.NewPaletted(img.Bounds(), img.Palette)
-			draw.Draw(paletted, paletted.Rect, ctx.Image(), img.Bounds().Min, draw.Src)
-			mux.Lock()
-			m.Gif.Image[i] = paletted
-			mux.Unlock()
-			wg.Done()
-		}(i, img)
+		go m.drawTextAt(i, img, &wg, &mux)
 	}
 	// Wait for all frames to be rendered
 	wg.Wait()
 	return nil
 }
 
-func (m *Meme) drawText(ctx *gg.Context, box *TextBox) error {
-	// Stroke size needs to be 40% of the line spacing.
-	lineSpacing := math.Ceil(ctx.FontHeight() * box.LineSpacingRatio)
-	strokeSize := int(lineSpacing * 0.4)
-	// Write the text with a white fill and black stroke.
-	// Inspired by the meme.go example in gg
-	ctx.SetHexColor("#000")
-	for dy := -strokeSize; dy <= strokeSize; dy++ {
-		for dx := -strokeSize; dx <= strokeSize; dx++ {
-			// Round corners (x^2 + y2 < r^2)
-			if dx*dx+dy*dy >= strokeSize*strokeSize {
-				continue
-			}
-			ctx.DrawStringAnchored(*box.Txt, float64(box.Center.X+dx), float64(box.Center.Y+dy), 0.5, 0.5)
-		}
+func (m *Meme) drawTextAt(i int, img *image.Paletted, wg *sync.WaitGroup, mux *sync.Mutex) {
+	size := img.Bounds()
+	// Build a GG context, and load the font face
+	ctx := gg.NewContext(size.Dx(), size.Dy())
+	ctx.DrawImage(img, 0, 0)
+	if *m.Top.Txt != "" {
+		ctx.LoadFontFace(m.Top.FontPath, m.Top.FontSize)
+		m.Top.DrawText(ctx)
 	}
-	ctx.SetHexColor("#FFF")
-	ctx.DrawStringAnchored(*box.Txt, float64(box.Center.X), float64(box.Center.Y), 0.5, 0.5)
-	return nil
+	if *m.Bottom.Txt != "" {
+		ctx.LoadFontFace(m.Bottom.FontPath, m.Bottom.FontSize)
+		m.Bottom.DrawText(ctx)
+	}
+	// Now we need to get a palettedimage back
+	paletted := image.NewPaletted(img.Bounds(), img.Palette)
+	draw.Draw(paletted, paletted.Rect, ctx.Image(), img.Bounds().Min, draw.Src)
+	mux.Lock()
+	m.Gif.Image[i] = paletted
+	mux.Unlock()
+	wg.Done()
+
 }
