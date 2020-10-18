@@ -1,5 +1,7 @@
+package cmd
+
 /*
-Copyright © 2020 NAME HERE <EMAIL ADDRESS>
+Copyright © 2020 Giuseppe Lavagetto
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -13,39 +15,49 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package cmd
 
 import (
 	"fmt"
+	"net/http"
 
+	"github.com/lavagetto/memeoid/api"
 	"github.com/spf13/cobra"
 )
+
+var gifDir string
+var memeDir string
+var port int
 
 // serveCmd represents the serve command
 var serveCmd = &cobra.Command{
 	Use:   "serve",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Short: "An http server to generate memes on request.",
+	Long:  `At the moment memeoid only works with a local filesystem.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("serve called")
+		memes := http.FileServer(http.Dir(memeDir))
+		memeURL := "meme"
+		memeHandler := &api.MemeHandler{
+			ImgPath:    gifDir,
+			OutputPath: memeDir,
+			MemeURL:    memeURL,
+			FontName:   fontName,
+		}
+		// Memes should be read from disk
+		http.Handle(fmt.Sprintf("/%s/", memeURL), memes)
+		// I "heart" the action api
+		http.HandleFunc("/w/api.php", memeHandler.MemeFromRequest)
+		http.HandleFunc("/gifs", memeHandler.ListGifs)
+		portStr := fmt.Sprintf(":%d", port)
+		fmt.Printf("Listening on %s\n", portStr)
+		http.ListenAndServe(portStr, nil)
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(serveCmd)
 
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// serveCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// serveCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	// flags and configuration settings.
+	serveCmd.Flags().StringVarP(&gifDir, "image-dir", "i", "./fixtures", "The directory where base gifs are stored")
+	serveCmd.Flags().StringVarP(&memeDir, "meme-dir", "m", "./memes", "The directory where memes are stored")
+	serveCmd.Flags().IntVarP(&port, "port", "p", 3000, "The port to listen on")
 }

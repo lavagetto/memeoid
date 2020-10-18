@@ -1,3 +1,5 @@
+package cmd
+
 /*
 Copyright © 2020 Giuseppe Lavagetto
 
@@ -13,7 +15,6 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package cmd
 
 import (
 	"fmt"
@@ -32,27 +33,29 @@ var gifPath string
 var topText string
 var bottomText string
 var outFile string
+var fontName string
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "memeoid",
 	Short: "A non-cloud-native meme generator",
-	Long: `Memeoid is a simple REST meme generator.
-  
-  It accepts the upload of images, and can then use them
-  in creating memes. Currently doesn't work!`,
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
+	Long: `Memeoid is a simple CLI or HTTP meme generator.
+  	 Currently only CLI works, and it's extremely crude!`,
 	Run: func(cmd *cobra.Command, args []string) {
 		meme, err := img.MemeFromFile(
 			gifPath,
 			topText,
 			bottomText,
-			"./impact.ttf",
+			fontName,
 		)
 		if err != nil {
 			panic(err)
 		}
+		// Uncomment for debugging
+		/*
+			meme.GifMetaData()
+			return
+		*/
 		err = meme.Generate()
 		if err != nil {
 			panic(err)
@@ -89,6 +92,7 @@ func init() {
 	rootCmd.Flags().StringVarP(&topText, "top", "t", "", "The text to add at the top")
 	rootCmd.Flags().StringVarP(&bottomText, "bottom", "b", "", "The text to insert at the bottom")
 	rootCmd.Flags().StringVarP(&outFile, "out", "o", "meme.gif", "File to output to.")
+	rootCmd.PersistentFlags().StringVarP(&fontName, "font", "f", "DejaVuSans", "Name of the ttf font on your system you want to use (default: impact).")
 }
 
 // initConfig reads in config file and ENV variables if set.
