@@ -18,7 +18,6 @@ limitations under the License.
 
 import (
 	"crypto/sha1"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"image/gif"
@@ -76,15 +75,17 @@ func (h *MemeHandler) ListGifs(w http.ResponseWriter, r *http.Request) {
 
 // UID returns the unique ID of the requested gif. This is determined
 // by a combination of the image name and the text (top and bottom)
-func (h *MemeHandler) UID(imageName string, top string, bottom string) (string, error) {
-	uid := []byte(fmt.Sprintf("@%s||%s||%s@", imageName, top, bottom))
+func (h *MemeHandler) UID(r *http.Request) (string, error) {
+	// Get a sorted version of the request parameters
+	uid := []byte(r.URL.Query().Encode())
 	// No need to use anything fancier than sha1
 	hasher := sha1.New()
 	_, err := hasher.Write(uid)
 	if err != nil {
 		return "", err
 	}
-	return base64.URLEncoding.EncodeToString(hasher.Sum(nil)), nil
+	bs := hasher.Sum(nil)
+	return fmt.Sprintf("%x", bs), nil
 }
 
 func (h *MemeHandler) saveImage(g *gif.GIF, path string) error {
@@ -117,7 +118,7 @@ func (h *MemeHandler) MemeFromRequest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "neither 'top' nor 'bottom' provided", http.StatusBadRequest)
 		return
 	}
-	uid, err := h.UID(imageName, top, bottom)
+	uid, err := h.UID(r)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -147,7 +148,7 @@ func (h *MemeHandler) MemeFromRequest(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	redirURL := fmt.Sprintf("/meme/%s.gif", uid)
+	redirURL := fmt.Sprintf("/%s/%s.gif", h.MemeURL, uid)
 	http.Redirect(w, r, redirURL, http.StatusPermanentRedirect)
 }
 

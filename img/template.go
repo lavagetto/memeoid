@@ -50,7 +50,7 @@ func (tpl *MemeTemplate) GetGif() (*gif.GIF, error) {
 }
 
 // GetMeme fills a template with the text strings provided
-func (tpl *MemeTemplate) GetMeme(text []string) (*Meme, error) {
+func (tpl *MemeTemplate) GetMeme(text ...string) (*Meme, error) {
 	numText := len(text)
 	numBoxes := len(tpl.boxes)
 	// Copy the textboxes, we definitely don't want to deal with concurrency issues
@@ -83,7 +83,6 @@ func SimpleTemplate(imgPath string, fontName string, maxFontSize float64, minFon
 		minFontSize: minFontSize,
 		maxFontSize: maxFontSize,
 		border:      0.01,
-		lineSpacing: 0.2,
 	}
 	// We need the size of the image
 	g, err := tpl.GetGif()
@@ -123,6 +122,5 @@ func MemeFromFile(path string, top string, bottom string, fontName string) (*Mem
 	if err != nil {
 		return nil, err
 	}
-	text := []string{top, bottom}
-	return tpl.GetMeme(text)
+	return tpl.GetMeme(top, bottom)
 }
