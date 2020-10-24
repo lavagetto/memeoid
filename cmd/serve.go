@@ -25,6 +25,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/gorilla/handlers"
+	"github.com/gorilla/mux"
 )
 
 var gifDir string
@@ -47,14 +48,18 @@ var serveCmd = &cobra.Command{
 			MemeURL:    "meme",
 		}
 		memeHandler.LoadTemplates(tplPath)
+
 		// Banner page
-		http.HandleFunc("/", memeHandler.ListGifs)
-		http.HandleFunc("/generate", memeHandler.Form)
-		http.Handle("/gifs/", http.StripPrefix("/gifs/", gifs))
+		r := mux.NewRouter()
+
+		r.HandleFunc("/", memeHandler.ListGifs)
+		r.HandleFunc("/generate", memeHandler.Form)
+		r.Handle("/gifs/", http.StripPrefix("/gifs/", gifs))
 		// Memes should be read from disk
-		http.Handle("/meme/", http.StripPrefix("/meme/", memes))
+		r.Handle("/meme/", http.StripPrefix("/meme/", memes))
 		// I "heart" the action api
-		http.HandleFunc("/w/api.php", memeHandler.MemeFromRequest)
+		r.HandleFunc("/w/api.php", memeHandler.MemeFromRequest)
+		http.Handle("/", r)
 		portStr := fmt.Sprintf(":%d", port)
 		customLog := handlers.LoggingHandler(os.Stdout, http.DefaultServeMux)
 		http.ListenAndServe(portStr, customLog)
