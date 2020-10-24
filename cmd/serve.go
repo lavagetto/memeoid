@@ -19,9 +19,12 @@ limitations under the License.
 import (
 	"fmt"
 	"net/http"
+	"os"
 
 	"github.com/lavagetto/memeoid/api"
 	"github.com/spf13/cobra"
+
+	"github.com/gorilla/handlers"
 )
 
 var gifDir string
@@ -53,8 +56,8 @@ var serveCmd = &cobra.Command{
 		// I "heart" the action api
 		http.HandleFunc("/w/api.php", memeHandler.MemeFromRequest)
 		portStr := fmt.Sprintf(":%d", port)
-		fmt.Printf("Listening on %s\n", portStr)
-		http.ListenAndServe(portStr, nil)
+		customLog := handlers.LoggingHandler(os.Stdout, http.DefaultServeMux)
+		http.ListenAndServe(portStr, customLog)
 	},
 }
 
