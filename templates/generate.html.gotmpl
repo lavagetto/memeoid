@@ -1,0 +1,24 @@
+<!-- 
+Yes, I can't believe how bad this page looks either.
+Patches welcome!
+-->
+<html>
+<title>Memeoid home page</title>
+<body>
+    <h1 class="title">Generate your meme!</h1>
+    <div class="body">
+        <p>Add top or bottom text to this gif!</p>
+        <figure>
+            <img src="/gifs/{{ . }}" />
+        </figure>
+    <form method="GET" action="/w/api.php">
+        <input type="hidden" name="from" value="{{ . }}">
+        <label for="top">Top:</label>
+        <input type="text" name="top" id="top"><br />
+        <label for="bottom">Bottom:</label>
+        <input type="text" name="bottom" id="botton"><br /> 
+        <input type="submit" value="I'm feeling lucky">      
+    </form>
+    </div>
+</body>
+</html>

@@ -83,6 +83,7 @@ func SimpleTemplate(imgPath string, fontName string, maxFontSize float64, minFon
 		minFontSize: minFontSize,
 		maxFontSize: maxFontSize,
 		border:      0.01,
+		lineSpacing: 0.3,
 	}
 	// We need the size of the image
 	g, err := tpl.GetGif()

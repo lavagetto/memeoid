@@ -27,6 +27,7 @@ import (
 var gifDir string
 var memeDir string
 var port int
+var tplPath string
 
 // serveCmd represents the serve command
 var serveCmd = &cobra.Command{
@@ -35,18 +36,22 @@ var serveCmd = &cobra.Command{
 	Long:  `At the moment memeoid only works with a local filesystem.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		memes := http.FileServer(http.Dir(memeDir))
-		memeURL := "meme"
+		gifs := http.FileServer(http.Dir(gifDir))
 		memeHandler := &api.MemeHandler{
 			ImgPath:    gifDir,
 			OutputPath: memeDir,
-			MemeURL:    memeURL,
 			FontName:   fontName,
+			MemeURL:    "meme",
 		}
+		memeHandler.LoadTemplates(tplPath)
+		// Banner page
+		http.HandleFunc("/", memeHandler.ListGifs)
+		http.HandleFunc("/generate", memeHandler.Form)
+		http.Handle("/gifs/", http.StripPrefix("/gifs/", gifs))
 		// Memes should be read from disk
-		http.Handle(fmt.Sprintf("/%s/", memeURL), memes)
+		http.Handle("/meme/", http.StripPrefix("/meme/", memes))
 		// I "heart" the action api
 		http.HandleFunc("/w/api.php", memeHandler.MemeFromRequest)
-		http.HandleFunc("/gifs", memeHandler.ListGifs)
 		portStr := fmt.Sprintf(":%d", port)
 		fmt.Printf("Listening on %s\n", portStr)
 		http.ListenAndServe(portStr, nil)
@@ -60,4 +65,5 @@ func init() {
 	serveCmd.Flags().StringVarP(&gifDir, "image-dir", "i", "./fixtures", "The directory where base gifs are stored")
 	serveCmd.Flags().StringVarP(&memeDir, "meme-dir", "m", "./memes", "The directory where memes are stored")
 	serveCmd.Flags().IntVarP(&port, "port", "p", 3000, "The port to listen on")
+	serveCmd.Flags().StringVar(&tplPath, "templates", "./templates", "Path to the teplate directory")
 }

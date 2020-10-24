@@ -68,6 +68,7 @@ func TestListGifs(t *testing.T) {
 	originalPath := h.ImgPath
 	for _, test := range testListGifs {
 		req := httptest.NewRequest(http.MethodGet, "http://localhost/gifs", reader)
+		req.Header.Set("Accept", "text/json")
 		rec := httptest.NewRecorder()
 		if test.Path != "" {
 			h.ImgPath = test.Path
@@ -113,9 +114,9 @@ func TestMemeGenerate(t *testing.T) {
 		if test.FileGenerated {
 			uid, err := h.UID(req)
 			assert.Nil(t, err)
-			filePath := path.Join(h.OutputPath, "url", fmt.Sprintf("%s.gif", uid))
+			filePath := path.Join(h.OutputPath, fmt.Sprintf("%s.gif", uid))
 			assert.FileExists(t, filePath)
-			assert.Contains(t, response.Header["Location"][0], uid)
+			assert.Contains(t, response.Header["Location"][0], fmt.Sprintf("/url/%s", uid))
 		}
 	}
 }

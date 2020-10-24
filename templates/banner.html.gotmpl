@@ -1,0 +1,21 @@
+<!-- 
+Yes, I can't believe how bad this page looks either.
+Patches welcome!
+-->
+<html>
+<title>Memeoid home page</title>
+<body>
+    <h1 class="title">Welcome to memeoid!</h1>
+    <div class="body">
+        <p>This installation has the following base gifs:</p>
+        {{- range . -}}
+        <a href="/generate?from={{ . }}">
+        <figure>
+            <img src="/gifs/{{ . }}"  />
+            <figcaption>{{ . }}</figcaption>
+        </figure>
+        </a>
+        {{- end -}}
+    </div>
+</body>
+</html>

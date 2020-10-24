@@ -20,16 +20,20 @@ import (
 	"crypto/sha1"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"image/gif"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 
 	"github.com/lavagetto/memeoid/img"
 )
 
+// MemeHandler is the base structure that
+// handles most web operations
 type MemeHandler struct {
 	// ImgPath is the filesystem path where all images are located
 	ImgPath string
@@ -38,7 +42,19 @@ type MemeHandler struct {
 	// FontName is the font to use
 	FontName string
 	// MemeURL is the url at which the file will be served
-	MemeURL string
+	MemeURL   string
+	templates *template.Template
+}
+
+// LoadTemplates pre-parses the templates.
+// Must be called before starting the server.
+func (h *MemeHandler) LoadTemplates(basepath string) {
+	if h.templates == nil {
+		h.templates = template.Must(template.ParseFiles(
+			basepath+"/banner.html.gotmpl",
+			basepath+"/generate.html.gotmpl",
+		))
+	}
 }
 
 // allGifs returns a list of all gifs
@@ -57,13 +73,7 @@ func (h *MemeHandler) allGifs() (*[]string, error) {
 	return &gifs, err
 }
 
-// ListGifs lists the available GIFs
-func (h *MemeHandler) ListGifs(w http.ResponseWriter, r *http.Request) {
-	gifs, err := h.allGifs()
-	if err != nil {
-		http.Error(w, "Not found", http.StatusNotFound)
-		return
-	}
+func (h *MemeHandler) jsonBanner(gifs *[]string, w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	js, err := json.Marshal(gifs)
 	if err != nil {
@@ -71,6 +81,62 @@ func (h *MemeHandler) ListGifs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Write(js)
+}
+
+func (h *MemeHandler) htmlBanner(gifs *[]string, w http.ResponseWriter) {
+	err := h.templates.ExecuteTemplate(w, "banner.html.gotmpl", gifs)
+	if err != nil {
+		// Yes, this is a reference to the EasyTimeLine MediaWiki extension.
+		http.Error(w, "Bad data: maybe ploticus is not installed?", http.StatusInternalServerError)
+	}
+}
+
+func (h *MemeHandler) getImageFromRequest(w http.ResponseWriter, r *http.Request) string {
+	qs := r.URL.Query()
+	imageName := qs.Get("from")
+	if imageName == "" {
+		http.Error(w, "missing 'from' parameter", http.StatusBadRequest)
+		return ""
+	}
+	// Check that the gif actually exists
+	imgFullPath := path.Join(h.ImgPath, imageName)
+	if _, err := os.Stat(imgFullPath); os.IsNotExist(err) {
+		http.Error(w, "image not found", http.StatusNotFound)
+		return ""
+	}
+	return imageName
+}
+
+// Form returns a form that will generate the meme
+func (h *MemeHandler) Form(w http.ResponseWriter, r *http.Request) {
+	imageName := h.getImageFromRequest(w, r)
+	if imageName == "" {
+		return
+	}
+	err := h.templates.ExecuteTemplate(w, "generate.html.gotmpl", imageName)
+	if err != nil {
+		// Yes, this is a reference to... sigh.
+		http.Error(w, "General error: is restbase calling itself?", http.StatusInternalServerError)
+	}
+}
+
+// ListGifs lists the available GIFs
+func (h *MemeHandler) ListGifs(w http.ResponseWriter, r *http.Request) {
+	gifs, err := h.allGifs()
+	if err != nil {
+		http.Error(w, "Not found", http.StatusNotFound)
+		return
+	}
+	// If the request is for json data, return it
+	if acceptHeaders, ok := r.Header["Accept"]; ok {
+		for _, hdr := range acceptHeaders {
+			if strings.Contains(hdr, "/json") {
+				h.jsonBanner(gifs, w)
+				return
+			}
+		}
+	}
+	h.htmlBanner(gifs, w)
 }
 
 // UID returns the unique ID of the requested gif. This is determined
@@ -100,18 +166,12 @@ func (h *MemeHandler) saveImage(g *gif.GIF, path string) error {
 // MemeFromRequest generates a meme image from a request, and saves it to disk. Then sends a
 // 301 to the user.
 func (h *MemeHandler) MemeFromRequest(w http.ResponseWriter, r *http.Request) {
-	qs := r.URL.Query()
-	imageName := qs.Get("from")
+	imageName := h.getImageFromRequest(w, r)
 	if imageName == "" {
-		http.Error(w, "missing 'from' parameter", http.StatusBadRequest)
 		return
 	}
-	// Check that the gif actually exists
 	imgFullPath := path.Join(h.ImgPath, imageName)
-	if _, err := os.Stat(imgFullPath); os.IsNotExist(err) {
-		http.Error(w, "image not found", http.StatusNotFound)
-		return
-	}
+	qs := r.URL.Query()
 	top := qs.Get("top")
 	bottom := qs.Get("bottom")
 	if top == "" && bottom == "" {
@@ -125,7 +185,7 @@ func (h *MemeHandler) MemeFromRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	// Now check if the file at $outputpath/$uid.gif exists. If it does,
 	// just redirect. Else generate the file and redirect
-	fullPath := path.Join(h.OutputPath, h.MemeURL, fmt.Sprintf("%s.gif", uid))
+	fullPath := path.Join(h.OutputPath, fmt.Sprintf("%s.gif", uid))
 	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
 		meme, err := img.MemeFromFile(
 			imgFullPath,
