@@ -22,26 +22,18 @@ By default the image is built to run memeoid as user 1000, for ease of use by me
 
 First, you need a directory containing gifs you want to use as base for the memes. The directory should be accessible to the UID we chose at build time. 
 
-Optionally, create a directory where the output memes will be saved.
+Then, you need to create a directory where the output memes will be saved.
 
 Now you can run memeoid
 
 ```bash
-# UID is the UID you used when building the image.
-# GIFDIR is the directory where the originals are contained
-# MEMEDIR is the output directory for the memes
-# PORT is the port you want to expose the service on
-chmod 0755 $GIFDIR
-chown -R $UID
-docker run --rm -p $PORT:3000 -v $GIFDIR:/gifs:ro \
-    -v $MEMEDIR:/memes:rw memeoid:latest
+GIFDIR=<dir-with-originals> MEMEDIR=<dir-for-memes> ./run.sh
 ```
 
 ## Modifying templates without a rebuild
-You can just mount your templates directory in your docker run:
+You can just point the TEMPLATEDIR variable to your template directory:
 ```bash
-docker run --rm -p $PORT:3000 -v $GIFDIR:/gifs:ro \
-    -v $TEMPLATEDIR:/src/templates:ro \
-    -v $MEMEDIR:/memes:rw memeoid:latest
+export TEMPLATEDIR=templates
+GIFDIR=<dir-with-originals> MEMEDIR=<dir-for-memes> ./run.sh
 ```
 Just remember that directory needs to be readable by the user running the application.
