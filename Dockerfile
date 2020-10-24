@@ -1,6 +1,6 @@
 FROM golang:buster AS build
 COPY . /src
-RUN cd /src && go mod vendor && GOOS=linux GOARCH=amd64 go build .  -a -installsuffix cgo -ldflags="-w -s" -o /src/memeoid
+RUN cd /src && go mod vendor && GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo -ldflags="-w -s" .
 
 # We're accepting the MS corefonts EULA implicitly.
 # TODO: add a way to dynamically accept before build? Or at least a warning.
