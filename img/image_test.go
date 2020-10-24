@@ -1,5 +1,21 @@
 package img
 
+/*
+Copyright © 2020 Giuseppe Lavagetto
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 import (
 	"image"
 	"image/color"
@@ -61,7 +77,15 @@ func TestTexboxFontSize(t *testing.T) {
 
 func TestDrawText(t *testing.T) {
 	fontpath := loadFont()
-	box, err := NewTextBox("X", 300, 200, image.Point{150, 100}, fontpath, 96.0, 8.0, 0.2)
+	// Create a simple textbox
+	box := TextBox{
+		Width:            300,
+		Height:           200,
+		Center:           image.Point{150, 100},
+		FontPath:         fontpath,
+		LineSpacingRatio: 0.2,
+	}
+	err := box.SetText("X", 52.0, 8.0)
 	if err != nil {
 		t.Errorf("Could not create the textbox: %v", err)
 	}
@@ -91,4 +115,4 @@ func TestDrawText(t *testing.T) {
 	}
 }
 
-// TODO: add test for Memegen
+// TODO: add test for Memegen and Template

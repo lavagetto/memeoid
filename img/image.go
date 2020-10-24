@@ -1,12 +1,27 @@
 package img
 
+/*
+Copyright © 2020 Giuseppe Lavagetto
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 import (
 	"fmt"
 	"image"
 	"image/draw"
 	"image/gif"
 	"math"
-	"os"
 	"strings"
 	"sync"
 
@@ -17,10 +32,8 @@ import (
 type Meme struct {
 	// The gif.GIF for the image
 	Gif *gif.GIF
-	// Text to add at the top
-	Top *TextBox
-	// Text to add at the bottom
-	Bottom *TextBox
+	// TextBoxes to add
+	TextBoxes *[]TextBox
 	// Border (fraction of image size)
 	Border float64
 }
@@ -43,21 +56,12 @@ type TextBox struct {
 	FontSize float64
 }
 
-func NewTextBox(text string, w int, h int, center image.Point, fontPath string, maxFontSize float64, minFontSize float64, lineSpacing float64) (*TextBox, error) {
-	t := TextBox{
-		Txt:              &text,
-		Width:            w,
-		Height:           h,
-		Center:           center,
-		FontPath:         fontPath,
-		LineSpacingRatio: lineSpacing,
-	}
-	fs, err := t.CalculateFontSize(maxFontSize, minFontSize)
-	if err != nil {
-		return nil, err
-	}
-	t.FontSize = fs
-	return &t, nil
+// SetText substitutes text into the textbox, and calculates the font size
+func (t *TextBox) SetText(txt string, maxFontSize float64, minFontSize float64) error {
+	t.Txt = &txt
+	var err error
+	t.FontSize, err = t.CalculateFontSize(maxFontSize, minFontSize)
+	return err
 }
 
 // CalculateFontSize calculates the maximum font size that can fit
@@ -86,7 +90,7 @@ func (t *TextBox) CalculateFontSize(maxFontSize float64, minFontSize float64) (f
 // DrawText draws the text into a gg context
 func (t *TextBox) DrawText(ctx *gg.Context) error {
 	if *t.Txt == "" {
-		return fmt.Errorf("trying to draw an empty string.")
+		return fmt.Errorf("trying to draw an empty string")
 	}
 	// Stroke size needs to be 40% of the line spacing.
 	lineSpacing := math.Ceil(ctx.FontHeight() * t.LineSpacingRatio)
@@ -108,43 +112,6 @@ func (t *TextBox) DrawText(ctx *gg.Context) error {
 	return nil
 }
 
-// MemeFromFile initiates a meme from a gif
-func MemeFromFile(path string, top string, bottom string, fontPath string) (*Meme, error) {
-	r, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer r.Close()
-	g, err := gif.DecodeAll(r)
-	if err != nil {
-		return nil, err
-	}
-	// TODO: get these from config
-	border := 0.01
-	maxFontSize := 52.0
-	minFontSize := 8.0
-	lineSpacing := 0.2
-	// Now generate the textboxes
-	size := g.Image[0].Bounds()
-	imgWidth := float64(size.Dx())
-	imgHeight := float64(size.Dy())
-	width := imgWidth * (1.0 - 2.0*border)
-	height := imgHeight * (1.0/3.0 - border)
-	X := int(imgWidth * 0.5)
-	Y := int(imgHeight*border + height*0.5)
-	c := image.Point{X, Y}
-	topBox, err := NewTextBox(top, int(width), int(height), c, fontPath, maxFontSize, minFontSize, lineSpacing)
-	if err != nil {
-		return nil, err
-	}
-	c.Y = int(imgHeight - imgHeight*border - height*0.5)
-	bottomBox, err := NewTextBox(bottom, int(width), int(height), c, fontPath, maxFontSize, minFontSize, lineSpacing)
-	if err != nil {
-		return nil, err
-	}
-	return &Meme{g, topBox, bottomBox, border}, nil
-}
-
 // GifMetaData returns metadata on the gif
 func (m *Meme) GifMetaData() {
 	for i, img := range m.Gif.Image {
@@ -164,19 +131,17 @@ func (m *Meme) GifMetaData() {
 func (m *Meme) NormalizeImage() {
 	g := m.Gif
 	size := g.Image[0].Bounds()
-	lastFullSizeIdx := 0
 	for i, img := range g.Image {
+		// If the image is not full-sized, we paint it on top of our last normalized image
 		if img.Bounds() != size {
 			// create an image of size "size", then draw the current image centered.
 			newImage := image.NewPaletted(size, img.Palette)
-			// First draw the last fullsize image here
-			lastFullSize := g.Image[lastFullSizeIdx]
+			// First draw the previous image here
+			lastFullSize := g.Image[i-1]
 			draw.Draw(newImage, size, lastFullSize, image.Point{0, 0}, draw.Src)
 			draw.Draw(newImage, img.Bounds(), img, img.Bounds().Min, draw.Src)
 			// now swap the image
 			g.Image[i] = newImage
-		} else {
-			lastFullSizeIdx = i
 		}
 	}
 }
@@ -203,14 +168,13 @@ func (m *Meme) drawTextAt(i int, img *image.Paletted, wg *sync.WaitGroup, mux *s
 	// Build a GG context, and load the font face
 	ctx := gg.NewContext(size.Dx(), size.Dy())
 	ctx.DrawImage(img, 0, 0)
-	if *m.Top.Txt != "" {
-		ctx.LoadFontFace(m.Top.FontPath, m.Top.FontSize)
-		m.Top.DrawText(ctx)
+	for _, box := range *m.TextBoxes {
+		if *box.Txt != "" {
+			ctx.LoadFontFace(box.FontPath, box.FontSize)
+			box.DrawText((ctx))
+		}
 	}
-	if *m.Bottom.Txt != "" {
-		ctx.LoadFontFace(m.Bottom.FontPath, m.Bottom.FontSize)
-		m.Bottom.DrawText(ctx)
-	}
+
 	// Now we need to get a palettedimage back
 	paletted := image.NewPaletted(img.Bounds(), img.Palette)
 	draw.Draw(paletted, paletted.Rect, ctx.Image(), img.Bounds().Min, draw.Src)
