@@ -26,6 +26,10 @@ import (
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var gifDir string
@@ -39,31 +43,55 @@ var serveCmd = &cobra.Command{
 	Short: "An http server to generate memes on request.",
 	Long:  `At the moment memeoid only works with a local filesystem.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		memes := http.FileServer(http.Dir(memeDir))
-		gifs := http.FileServer(http.Dir(gifDir))
-		memeHandler := &api.MemeHandler{
-			ImgPath:    gifDir,
-			OutputPath: memeDir,
-			FontName:   fontName,
-			MemeURL:    "meme",
+		ctl := api.Controller{
+			Handler: &api.MemeHandler{
+				ImgPath:    gifDir,
+				OutputPath: memeDir,
+				FontName:   fontName,
+				MemeURL:    "meme",
+			},
+			Router: mux.NewRouter(),
 		}
-		memeHandler.LoadTemplates(tplPath)
 
-		// Banner page
-		r := mux.NewRouter()
+		ctl.StaticRoute("/gifs/", gifDir)
+		ctl.StaticRoute("/meme/", memeDir)
+		ctl.Load(tplPath)
+		// Add prometheus metrics
+		ctl.Router.Use(telemetryMiddleware)
+		ctl.Router.Path("/metrics").Handler(promhttp.Handler())
 
-		r.HandleFunc("/", memeHandler.ListGifs)
-		r.HandleFunc("/generate", memeHandler.Form)
-		r.Handle("/gifs/", http.StripPrefix("/gifs/", gifs))
-		// Memes should be read from disk
-		r.Handle("/meme/", http.StripPrefix("/meme/", memes))
-		// I "heart" the action api
-		r.HandleFunc("/w/api.php", memeHandler.MemeFromRequest)
-		http.Handle("/", r)
+		// Handle the root of the site with the controller
+		http.Handle("/", ctl.Router)
 		portStr := fmt.Sprintf(":%d", port)
-		customLog := handlers.LoggingHandler(os.Stdout, http.DefaultServeMux)
+		// Setup logging
+		customLog := handlers.CombinedLoggingHandler(os.Stdout, http.DefaultServeMux)
 		http.ListenAndServe(portStr, customLog)
 	},
+}
+
+var httpDuration = promauto.NewHistogramVec(
+	prometheus.HistogramOpts{
+		Name: "memeoid_http_duration_seconds",
+		Help: "Duration of http requests",
+	},
+	[]string{"path", "gif"},
+)
+
+func telemetryMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			route := mux.CurrentRoute(r)
+			path, _ := route.GetPathTemplate()
+			v := mux.Vars(r)
+			gif := "-"
+			if g, ok := v["from"]; ok {
+				gif = g
+			}
+			timer := prometheus.NewTimer(httpDuration.WithLabelValues(path, gif))
+			next.ServeHTTP(w, r)
+			timer.ObserveDuration()
+		},
+	)
 }
 
 func init() {
