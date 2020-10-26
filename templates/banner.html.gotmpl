@@ -1,21 +1,27 @@
-<!-- 
-Yes, I can't believe how bad this page looks either.
-Patches welcome!
--->
+<!DOCTYPE html>
 <html>
-<title>Memeoid home page</title>
-<body>
-    <h1 class="title">Welcome to memeoid!</h1>
-    <div class="body">
-        <p>This installation has the following base gifs:</p>
-        {{- range . -}}
-        <a href="/generate?from={{ . }}">
-        <figure>
-            <img src="/gifs/{{ . }}"  />
-            <figcaption>{{ . }}</figcaption>
-        </figure>
-        </a>
-        {{- end -}}
-    </div>
-</body>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Memeoid home page</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.1/css/bulma.min.css">
+  </head>
+    <body>
+        <div class="container">
+            <h1 class="title">Welcome to memeoid!</h1>
+            <p class="content is-big">This installation has the following base gifs:</p>
+            <div class="columns is-multiline">
+            {{- range . -}}
+                <div class="column is-3">
+                    <figure class="image is-128x128">
+                        <img src="/thumb/128x128/{{ . }}"  />
+                    </figure>
+                    <div class="control">
+                            <a href="/generate?from={{ . }}"><button class="button is-link">Memeize</button></a>
+                    </div>
+                </div>
+            {{- end -}}
+            </div>
+        </div>
+    </body>
 </html>

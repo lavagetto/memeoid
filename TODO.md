@@ -1,7 +1,7 @@
 ## TODO
 ### Known bugs
 * Trailing space in the form is not trimmed
-* some css won't hurt
+* Word-wrapping works when calculating font size, not when drawing(!!!)
 
 
 ### For feature-completeness
