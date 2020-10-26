@@ -22,13 +22,16 @@ import (
 	"fmt"
 	"html/template"
 	"image/gif"
+	"image/jpeg"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 
+	"github.com/gorilla/mux"
 	"github.com/lavagetto/memeoid/img"
 )
 
@@ -92,9 +95,9 @@ func (h *MemeHandler) htmlBanner(gifs *[]string, w http.ResponseWriter) {
 }
 
 func (h *MemeHandler) getImageFromRequest(w http.ResponseWriter, r *http.Request) string {
-	qs := r.URL.Query()
-	imageName := qs.Get("from")
-	if imageName == "" {
+	vars := mux.Vars(r)
+	imageName, ok := vars["from"]
+	if !ok {
 		http.Error(w, "missing 'from' parameter", http.StatusBadRequest)
 		return ""
 	}
@@ -216,4 +219,39 @@ func (h *MemeHandler) memeExists(uid string) bool {
 	fullPath := path.Join(h.OutputPath, fmt.Sprintf("%s.gif", uid))
 	_, err := os.Stat(fullPath)
 	return !os.IsNotExist(err)
+}
+
+// Preview returns a thumbnail, in jpeg format
+func (h *MemeHandler) Preview(w http.ResponseWriter, r *http.Request) {
+	fmt.Printf("In preview!")
+	vars := mux.Vars(r)
+	imageName := h.getImageFromRequest(w, r)
+	if imageName == "" {
+		http.Error(w, "Image not found", http.StatusNotFound)
+		return
+	}
+	width, err := strconv.ParseUint(vars["width"], 10, 0)
+	if err != nil {
+		http.Error(w, "width must be specified", http.StatusBadRequest)
+	}
+	height, err := strconv.ParseUint(vars["height"], 10, 0)
+	if err != nil {
+		http.Error(w, "height must be specified", http.StatusBadRequest)
+	}
+	imgFullPath := path.Join(h.ImgPath, imageName)
+	tpl, err := img.SimpleTemplate(imgFullPath, h.FontName, 52.0, 8.0)
+	if err != nil {
+		http.Error(w, "error generating the thumbnail", http.StatusInternalServerError)
+		return
+	}
+	g, err := tpl.GetGif()
+	if err != nil {
+		http.Error(w, "error generating the thumbnail", http.StatusInternalServerError)
+		return
+	}
+	m := img.Meme{Gif: g}
+	thumb := m.Preview(uint(width), uint(height))
+	w.Header().Set("Content-Type", "image/jpeg")
+	jpeg.Encode(w, thumb, nil)
+
 }

@@ -26,6 +26,7 @@ import (
 	"sync"
 
 	"github.com/fogleman/gg"
+	"github.com/nfnt/resize"
 )
 
 // Meme is a structure describing a meme
@@ -144,6 +145,12 @@ func (m *Meme) NormalizeImage() {
 			g.Image[i] = newImage
 		}
 	}
+}
+
+// Preview returns a square of the required width and height
+func (m *Meme) Preview(width, height uint) image.Image {
+	toScreenshot := m.Gif.Image[0]
+	return resize.Thumbnail(width, height, toScreenshot, resize.Lanczos3)
 }
 
 // Generate modifies the image adding the meme text
