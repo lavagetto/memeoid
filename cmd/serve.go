@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path"
 
 	"github.com/lavagetto/memeoid/api"
 	"github.com/spf13/cobra"
@@ -36,6 +37,7 @@ var gifDir string
 var memeDir string
 var port int
 var tplPath string
+var certPath string
 
 // serveCmd represents the serve command
 var serveCmd = &cobra.Command{
@@ -65,7 +67,15 @@ var serveCmd = &cobra.Command{
 		portStr := fmt.Sprintf(":%d", port)
 		// Setup logging
 		customLog := handlers.CombinedLoggingHandler(os.Stdout, http.DefaultServeMux)
-		http.ListenAndServe(portStr, customLog)
+		if certPath != "" {
+			key := path.Join(certPath, "privkey.pem")
+			fullchain := path.Join(certPath, "fullchain.pem")
+			// Add an HSTS header
+			ctl.Router.Use(hstsMiddleware)
+			http.ListenAndServeTLS(portStr, fullchain, key, customLog)
+		} else {
+			http.ListenAndServe(portStr, customLog)
+		}
 	},
 }
 
@@ -94,6 +104,15 @@ func telemetryMiddleware(next http.Handler) http.Handler {
 	)
 }
 
+func hstsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Strict-Transport-Security", "max-age=864000")
+			next.ServeHTTP(w, r)
+		},
+	)
+}
+
 func init() {
 	rootCmd.AddCommand(serveCmd)
 
@@ -102,4 +121,5 @@ func init() {
 	serveCmd.Flags().StringVarP(&memeDir, "meme-dir", "m", "./memes", "The directory where memes are stored")
 	serveCmd.Flags().IntVarP(&port, "port", "p", 3000, "The port to listen on")
 	serveCmd.Flags().StringVar(&tplPath, "templates", "./templates", "Path to the teplate directory")
+	serveCmd.Flags().StringVar(&certPath, "certpath", "", "Set this to your letsencrypt directory if you want TLS to work")
 }
