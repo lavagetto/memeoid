@@ -18,28 +18,29 @@ type Controller struct {
 	Router  *mux.Router
 }
 
-func (r *Controller) routeFor(path string, f func(w http.ResponseWriter, r *http.Request), methods ...string) {
-	subrouter := r.Router.Path(path).Subrouter()
-	subrouter.Methods(methods...).HandlerFunc(f)
+func (r *Controller) routeFor(path string, f func(w http.ResponseWriter, r *http.Request), requireFrom bool, methods ...string) {
+	subrouter := r.Router.Path(path).Methods(methods...).Subrouter()
+	if requireFrom {
+		subrouter.Queries("from", "{from}").HandlerFunc(f)
+		subrouter.Queries().HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "The 'from' parameter is required", http.StatusBadRequest)
+		})
+	} else {
+		subrouter.HandleFunc("/", f)
+	}
 }
 
 // Load sets up all dynamic routes.
 func (r *Controller) Load(tplPath string) {
 	r.Handler.LoadTemplates(tplPath)
 	// Homepage
-	r.routeFor("/", r.Handler.ListGifs, "GET", "HEAD")
+	r.routeFor("/", r.Handler.ListGifs, false, "GET", "HEAD")
 	// Form
-	r.routeFor("/generate", r.Handler.Form, "GET", "HEAD")
-	r.api()
-}
-
-func (r *Controller) api() {
+	r.routeFor("/generate", r.Handler.Form, true, "GET", "HEAD")
 	// I "heart" the action api
-	subrouter := r.Router.Path("/w/api.php").Methods("GET").Subrouter()
-	subrouter.Queries("from", "{from}").HandlerFunc(r.Handler.MemeFromRequest)
-	subrouter.Queries().HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "The 'from' parameter is required", http.StatusBadRequest)
-	})
+	r.routeFor("/w/api.php", r.Handler.MemeFromRequest, true, "GET")
+	// Thumbnails
+	r.Router.Path("/thumb/{width:[0-9]+}x{height:[0-9]+}/{from}").Methods("GET", "HEAD").HandlerFunc(r.Handler.Preview)
 }
 
 // StaticRoute sets up a static route
