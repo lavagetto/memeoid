@@ -105,11 +105,11 @@ func (t *TextBox) DrawText(ctx *gg.Context) error {
 			if dx*dx+dy*dy >= strokeSize*strokeSize {
 				continue
 			}
-			ctx.DrawStringAnchored(*t.Txt, float64(t.Center.X+dx), float64(t.Center.Y+dy), 0.5, 0.5)
+			ctx.DrawStringWrapped(*t.Txt, float64(t.Center.X+dx), float64(t.Center.Y+dy), 0.5, 0.5, float64(t.Width), 1.0+t.LineSpacingRatio, gg.AlignCenter)
 		}
 	}
 	ctx.SetHexColor("#FFF")
-	ctx.DrawStringAnchored(*t.Txt, float64(t.Center.X), float64(t.Center.Y), 0.5, 0.5)
+	ctx.DrawStringWrapped(*t.Txt, float64(t.Center.X), float64(t.Center.Y), 0.5, 0.5, float64(t.Width), 1.0+t.LineSpacingRatio, gg.AlignCenter)
 	return nil
 }
 
