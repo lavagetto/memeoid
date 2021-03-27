@@ -23,9 +23,14 @@ func (s *TemplateTestSuite) SetupSuite() {
 	s.fontPath = fontPath
 }
 
-func (s *TemplateTestSuite) TestGetMeme() {
-	box := TextBox{Width: 100, Height: 50, Center: image.Point{200, 200}, FontPath: s.fontPath}
-	tpl := MemeTemplate{
+func (s TemplateTestSuite) createTemplate() MemeTemplate {
+	box := TextBox {
+		Width:    100,
+		Height:   50,
+		Center:   image.Point{200, 200},
+		FontPath: s.fontPath,
+	}
+	return MemeTemplate {
 		gifPath:     "fixtures/earth.gif",
 		boxes:       []TextBox{box},
 		border:      0.1,
@@ -33,37 +38,56 @@ func (s *TemplateTestSuite) TestGetMeme() {
 		maxFontSize: 52.0,
 		lineSpacing: 0.2,
 	}
-	// Meme with no text provided => error
-	m, err := tpl.GetMeme()
+}
+
+func (s *TemplateTestSuite) TestGetMemeWithNoProvidedName() {
+	sut := s.createTemplate()
+
+	_, err := sut.GetMeme()
+
 	s.Error(err, "no text provided should cause a failure")
-	m, err = tpl.GetMeme("test")
+}
+
+func (s *TemplateTestSuite) TestGetMeme() {
+	sut := s.createTemplate()
+
+	m, err := sut.GetMeme("test")
+
 	s.Nil(err, "error loading the meme: %v", err)
 	s.Equal(*(*m.TextBoxes)[0].Txt, "test", "Not correctly assigned text to textbox")
 	s.Equal((*m.TextBoxes)[0].FontSize, 52.0, "Not correctly set the font size")
 	s.IsType(&gif.GIF{}, m.Gif, "A gif should be loaded")
-	tpl.gifPath = "fixtures/badfile.gif"
-	m, err = tpl.GetMeme("test")
+}
+
+func (s *TemplateTestSuite) TestCorruptedSourceFile() {
+	sut := s.createTemplate()
+	sut.gifPath = "fixtures/badfile.gif"
+	
+	_, err := sut.GetMeme("test")
+
 	s.Error(err, "Should not generate a meme if the gif is corrupted")
 }
 
 func (s *TemplateTestSuite) TestGetGif() {
 	var testGetGif = []struct {
-		path string
-		err  bool
+		path     string
+		isError  bool
 	}{
 		{"fixtures/earth.gif", false},
 		{"fixtures/non-existent.gif", true},
 		{"fixtures/badfile.gif", true},
 	}
 	for _, tc := range testGetGif {
-		testName := fmt.Sprintf("path: %s - err: %t", tc.path, tc.err)
+		testName := fmt.Sprintf("path: %s - err: %t", tc.path, tc.isError)
 		s.Run(testName, func() {
-			m := MemeTemplate{gifPath: tc.path}
-			_, err := m.GetGif()
-			if tc.err && err == nil {
+			sut := MemeTemplate{ gifPath: tc.path }
+			
+			_, err := sut.GetGif()
+			
+			if tc.isError && err == nil {
 				s.Errorf(nil, "test loading %s should have generated an error: %v", tc.path, err)
 			}
-			if !tc.err && err != nil {
+			if !tc.isError && err != nil {
 				s.Errorf(err, "test loading %s should have not generated an error: %v", tc.path, err)
 			}
 		})
