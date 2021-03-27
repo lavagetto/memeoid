@@ -17,77 +17,43 @@ limitations under the License.
 */
 
 import (
+	"fmt"
 	"image"
 	"image/color"
 	"testing"
 
 	"github.com/flopp/go-findfont"
 	"github.com/fogleman/gg"
+	"github.com/stretchr/testify/suite"
 )
 
-func loadFont() string {
-	// Tests will need dejavu sans to be installed on the system
-	fontPath, err := findfont.Find("DejaVuSans.ttf")
+const defaultFont string = "DejaVuSans.ttf"
+
+type ImageTestSuite struct {
+	suite.Suite
+	fontPath string
+}
+
+func (s *ImageTestSuite) SetupSuite() {
+	fontPath, err := findfont.Find(defaultFont)
 	if err != nil {
 		panic(err)
 	}
-	return fontPath
+	s.fontPath = fontPath
 }
 
-var textBoxFontSizeTests = []struct {
-	width  int
-	height int
-	size   float64
-	hasErr bool
-}{
-	{0, 100, 0.0, true},       // one of the textbox dimensions is too small
-	{1000, 1000, 52.0, false}, // a large box keeps the original size
-	{200, 200, 42.0, false},   // A smaller box reduces the size
-	{200, 25, 34.0, false},    // A thinner box avoids word wrapping
-	{20, 20, 0.0, true},       // a too small box can't contain the text
-}
-
-func TestTexboxFontSize(t *testing.T) {
-	fontpath := loadFont()
-	text := "testing memeoid"
-	for _, testCase := range textBoxFontSizeTests {
-		box := TextBox{
-			Txt:      &text,
-			Width:    testCase.width,
-			Height:   testCase.height,
-			Center:   image.Point{0, 0},
-			FontPath: fontpath,
-		}
-		fontSize, err := box.CalculateFontSize(52.0, 8.0)
-		if testCase.hasErr {
-			if err == nil {
-				t.Errorf("Expected the box %dx%d to generate an error, got a fontsize of %f", testCase.width, testCase.height, fontSize)
-			}
-		} else {
-			if err != nil {
-				t.Errorf("For test case %v got unexpected error %v", testCase, err)
-			}
-			if fontSize != testCase.size {
-				t.Errorf("Expected the box %dx%d to have font size %d, found %d",
-					testCase.width, testCase.height, int(testCase.size), int(fontSize))
-			}
-		}
-	}
-}
-
-func TestDrawText(t *testing.T) {
-	fontpath := loadFont()
+func (s *ImageTestSuite) TestDrawText() {
 	// Create a simple textbox
 	box := TextBox{
 		Width:            300,
 		Height:           200,
 		Center:           image.Point{150, 100},
-		FontPath:         fontpath,
+		FontPath:         s.fontPath,
 		LineSpacingRatio: 0.2,
 	}
 	err := box.SetText("X", 52.0, 8.0)
 	if err != nil {
-		t.Errorf("Could not create the textbox: %v", err)
+		s.Errorf(err, "Could not create the textbox: %v", err)
 	}
 
 	ctx := gg.NewContext(box.Width, box.Height)
@@ -95,24 +61,72 @@ func TestDrawText(t *testing.T) {
 	ctx.Clear()
 	ctx.SetRGB(0, 0, 0)
 
-	ctx.LoadFontFace(fontpath, box.FontSize)
+	ctx.LoadFontFace(s.fontPath, box.FontSize)
 	err = box.DrawText(ctx)
 	if err != nil {
-		t.Errorf("Could not draw the text, %v", err)
+		s.Errorf(err, "Could not draw the text, %v", err)
 	}
 	rendered := ctx.Image()
 	// Test a pixel at the border of the box is not printed to
 	red := color.RGBA{255, 0, 0, 255}
 	originColor := rendered.At(0, 0)
 	if originColor != red {
-		t.Errorf("Expected red at 0,0; found %v", originColor)
+		s.Errorf(nil, "Expected red at 0,0; found %v", originColor)
 	}
 	// The color at the center should be white, as we're printing text there
 	centerColor := rendered.At(150, 100)
 	white := color.RGBA{255, 255, 255, 255}
 	if centerColor != white {
-		t.Errorf("Expected the box center to be white, found %v", centerColor)
+		s.Errorf(nil, "Expected the box center to be white, found %v", centerColor)
+	}
+}
+
+func (s *ImageTestSuite) TestTexboxFontSize() {
+	text := "testing memeoid"
+	var testCases = []struct {
+		width  int
+		height int
+		size   float64
+		hasErr bool
+	}{
+		{0, 100, 0.0, true},       // one of the textbox dimensions is too small
+		{1000, 1000, 52.0, false}, // a large box keeps the original size
+		{200, 200, 42.0, false},   // A smaller box reduces the size
+		{200, 25, 34.0, false},    // A thinner box avoids word wrapping
+		{20, 20, 0.0, true},       // a too small box can't contain the text
+	}
+	for _, tc := range testCases {
+		testName := fmt.Sprintf("width: %d - height: %d - size: %f - hasErr: %t", tc.width, tc.height, tc.size, tc.hasErr)
+		s.Run(testName, func(){
+			box := TextBox{
+				Txt:      &text,
+				Width:    tc.width,
+				Height:   tc.height,
+				Center:   image.Point{0, 0},
+				FontPath: s.fontPath,
+			}
+			fontSize, err := box.CalculateFontSize(52.0, 8.0)
+			if tc.hasErr {
+				if err == nil {
+					s.Errorf(err, "Expected the box %dx%d to generate an error, got a fontsize of %f", tc.width, tc.height, fontSize)
+				}
+			} else {
+				if err != nil {
+					s.Errorf(err, "For test case %v got unexpected error %v", tc, err)
+				}
+				if fontSize != tc.size {
+					s.Errorf(nil, "Expected the box %dx%d to have font size %d, found %d",
+						tc.width, tc.height, int(tc.size), int(fontSize))
+				}
+			}
+		})
 	}
 }
 
 // TODO: add test for Memegen and Template
+
+func TestImageTestSuite(t *testing.T) {
+	suite.Run(t, new(ImageTestSuite))
+}
+
+
