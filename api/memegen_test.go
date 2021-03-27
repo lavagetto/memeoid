@@ -10,51 +10,66 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	// "github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
 )
 
-var sut *MemeHandler
+const baseUrl string = "url"
+const baseImgPath string = "../img/fixtures/"
+const fontName string = "DejaVuSans"
 
-func setUp() {
+
+type MemeGenTestSuite struct {
+	suite.Suite
+	TempDir string
+	Sut *MemeHandler 
+}
+
+func (s *MemeGenTestSuite) SetupSuite() {
 	tempdir, err := ioutil.TempDir("", "memeoid-api")
 	if err != nil {
 		panic(err)
 	}
-	sut = &MemeHandler{
-		OutputPath: tempdir,
-		ImgPath:    "../img/fixtures/",
-		FontName:   "DejaVuSans",
-		MemeURL:    "url",
+	os.Mkdir(path.Join(tempdir, baseUrl), os.FileMode(0755))
+	s.TempDir = tempdir
+}
+
+func (s *MemeGenTestSuite) TeardownSuite() {
+	os.RemoveAll(s.TempDir)
+}
+
+func (s *MemeGenTestSuite) SetupTest() {
+	s.Sut = &MemeHandler{
+		OutputPath: s.TempDir,
+		ImgPath:    baseImgPath,
+		FontName:   fontName,
+		MemeURL:    baseUrl,
 	}
-	os.Mkdir(path.Join(tempdir, sut.MemeURL), os.FileMode(0755))
 }
 
-func tearDown() {
-	os.RemoveAll(sut.OutputPath)
+func (s *MemeGenTestSuite) TeardownTest() {
+	s.Sut = nil
 }
 
-func TestMain(m *testing.M) {
-	setUp()
-	code := m.Run()
-	tearDown()
-	os.Exit(code)
-}
-
-func TestUID(t *testing.T) {
+func (s *MemeGenTestSuite) TestUID() {
 	// Two requests with the same parameters create the same UID
 	reader := strings.NewReader("")
 	r := httptest.NewRequest(http.MethodGet, "http://localhost/w/api.php?first=a&last=b", reader)
 	r1 := httptest.NewRequest(http.MethodGet, "http://localhost/w/api.php?last=b&first=a", reader)
-	uid, err := sut.UID(r)
-	assert.Nil(t, err, "could not calculate the UID: %v", err)
-	uid1, err := sut.UID(r1)
-	assert.Nil(t, err, "could not calculate the UID: %v", err)
-	assert.Equal(t, uid, uid1, "expected the UIDs to be equal for the same query parameters")
+	
+	uid, err := s.Sut.UID(r)
+	s.Nil(err, "could not calculate the UID: %v", err)
+	
+	uid1, err := s.Sut.UID(r1)
+	s.Nil(err, "could not calculate the UID: %v", err)
+	s.Equal(uid, uid1, "expected the UIDs to be equal for the same query parameters")
+	
 	// But this is case-sensitive.
 	r1 = httptest.NewRequest(http.MethodGet, "http://localhost/w/api.php?last=b&First=a", reader)
-	uid1, err = sut.UID(r1)
-	assert.Nil(t, err, "could not calculate the UID: %v", err)
-	assert.NotEqual(t, uid, uid1, "expected the UIDs to be different for different capitalizations")
+	
+	uid1, err = s.Sut.UID(r1)
+	s.Nil(err, "could not calculate the UID: %v", err)
+	s.NotEqual(uid, uid1, "expected the UIDs to be different for different capitalizations")
 }
 
 var testListGifs = []struct {
@@ -67,30 +82,30 @@ var testListGifs = []struct {
 	{"/nonexistent", "", "404 Not Found", ""},
 }
 
-func TestListGifs(t *testing.T) {
+func (s *MemeGenTestSuite) TestListGifs() {
 	reader := strings.NewReader("")
-	originalPath := sut.ImgPath
+	originalPath := s.Sut.ImgPath
 	for _, test := range testListGifs {
 		req := httptest.NewRequest(http.MethodGet, "http://localhost/gifs", reader)
 		req.Header.Set("Accept", "text/json")
 		rec := httptest.NewRecorder()
 		if test.Path != "" {
-			sut.ImgPath = test.Path
+			s.Sut.ImgPath = test.Path
 		} else {
-			sut.ImgPath = originalPath
+			s.Sut.ImgPath = originalPath
 		}
-		sut.ListGifs(rec, req)
+		s.Sut.ListGifs(rec, req)
 		response := rec.Result()
 		if test.ContentType != "" {
-			assert.Equal(t, []string{test.ContentType}, response.Header["Content-Type"])
+			s.Equal([]string{test.ContentType}, response.Header["Content-Type"])
 		}
 		if test.Body != "" {
 			defer response.Body.Close()
 			body, err := ioutil.ReadAll(response.Body)
-			assert.Nil(t, err)
-			assert.Equal(t, test.Body, string(body))
+			s.Nil(err)
+			s.Equal(test.Body, string(body))
 		}
-		assert.Equal(t, test.Status, response.Status)
+		s.Equal(test.Status, response.Status)
 	}
 }
 
@@ -105,20 +120,27 @@ var testMemeGenerate = []struct {
 	{"http://localhost/w/api.php?from=earth.gif&top=test", http.StatusPermanentRedirect, true},
 }
 
-func TestMemeGenerate(t *testing.T) {
+func (s *MemeGenTestSuite) TestMemeGenerate() {
 	for _, test := range testMemeGenerate {
-		reader := strings.NewReader("")
-		req := httptest.NewRequest(http.MethodGet, test.Uri, reader)
+
+		req := httptest.NewRequest(http.MethodGet, test.Uri, strings.NewReader(""))
 		rec := httptest.NewRecorder()
-		sut.MemeFromRequest(rec, req)
+
+		s.Sut.MemeFromRequest(rec, req)
 		response := rec.Result()
-		assert.Equal(t, test.StatusCode, response.StatusCode)
+
+		s.Equal(test.StatusCode, response.StatusCode)
+		
 		if test.FileGenerated {
-			uid, err := sut.UID(req)
-			assert.Nil(t, err)
-			filePath := path.Join(sut.OutputPath, fmt.Sprintf("%s.gif", uid))
-			assert.FileExists(t, filePath)
-			assert.Contains(t, response.Header["Location"][0], fmt.Sprintf("/url/%s", uid))
+			uid, err := s.Sut.UID(req)
+			s.Nil(err)
+			filePath := path.Join(s.Sut.OutputPath, fmt.Sprintf("%s.gif", uid))
+			s.FileExists(filePath)
+			s.Contains(response.Header["Location"][0], fmt.Sprintf("/url/%s", uid))
 		}
 	}
+}
+
+func TestMemeGenTestSuite(t *testing.T) {
+    suite.Run(t, new(MemeGenTestSuite))
 }
