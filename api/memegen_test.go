@@ -82,17 +82,17 @@ func (s *MemeGenTestSuite) TestListGifs() {
 	for _, tc := range testCases {
 		testName := fmt.Sprintf("Path: %s - ContentType: %s - Status: %s - Body: %s", tc.Path, tc.ContentType, tc.Status, tc.Body)
 		s.Run(testName, func() {
+			s.Sut.ImgPath = baseImgPath
 			if tc.Path != "" {
 				s.Sut.ImgPath = tc.Path
 			}
-
 			req := httptest.NewRequest(http.MethodGet, "http://localhost/gifs", strings.NewReader(""))
 			req.Header.Set("Accept", "text/json")
 			rec := httptest.NewRecorder()
 
 			s.Sut.ListGifs(rec, req)
+			
 			response := rec.Result()
-
 			s.Equal(tc.Status, response.Status)
 			if tc.ContentType != "" {
 				s.Equal([]string{tc.ContentType}, response.Header["Content-Type"])
@@ -117,6 +117,8 @@ func (s *MemeGenTestSuite) TestMemeGenerate() {
 		{"http://localhost/w/api.php?from=lala", http.StatusNotFound, false},
 		{"http://localhost/w/api.php?from=earth.gif", http.StatusBadRequest, false},
 		{"http://localhost/w/api.php?from=earth.gif&top=test", http.StatusPermanentRedirect, true},
+		{"http://localhost/w/api.php?from=earth.gif&bottom=test", http.StatusPermanentRedirect, true},
+		{"http://localhost/w/api.php?from=earth.gif&bottom=test&top=test", http.StatusPermanentRedirect, true},
 	}
 	for _, tc := range testCases {
 		testName := fmt.Sprintf("Uri: %s - StatusCode: %d - Genereate: %t", tc.Uri, tc.StatusCode, tc.FileGenerated)
@@ -125,8 +127,8 @@ func (s *MemeGenTestSuite) TestMemeGenerate() {
 			rec := httptest.NewRecorder()
 
 			s.Sut.MemeFromRequest(rec, req)
+			
 			response := rec.Result()
-
 			s.Equal(tc.StatusCode, response.StatusCode)
 			if tc.FileGenerated {
 				locationPrefix := "/" + baseMemeUrl + "/"
