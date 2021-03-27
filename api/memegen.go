@@ -95,9 +95,14 @@ func (h *MemeHandler) htmlBanner(gifs *[]string, w http.ResponseWriter) {
 }
 
 func (h *MemeHandler) getImageFromRequest(w http.ResponseWriter, r *http.Request) string {
-	vars := mux.Vars(r)
-	imageName, ok := vars["from"]
-	if !ok {
+	// vars := mux.Vars(r)
+	// imageName, ok := vars["from"]
+	// if !ok {
+	// 	http.Error(w, "missing 'from' parameter", http.StatusBadRequest)
+	// 	return ""
+	// }
+	imageName := r.FormValue("from")
+	if imageName == "" {
 		http.Error(w, "missing 'from' parameter", http.StatusBadRequest)
 		return ""
 	}
