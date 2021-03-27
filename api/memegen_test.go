@@ -10,19 +10,17 @@ import (
 	"strings"
 	"testing"
 
-	// "github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
 
-const baseUrl string = "url"
+const baseMemeUrl string = "url"
 const baseImgPath string = "../img/fixtures/"
 const fontName string = "DejaVuSans"
-
 
 type MemeGenTestSuite struct {
 	suite.Suite
 	TempDir string
-	Sut *MemeHandler 
+	Sut     *MemeHandler
 }
 
 func (s *MemeGenTestSuite) SetupSuite() {
@@ -30,7 +28,6 @@ func (s *MemeGenTestSuite) SetupSuite() {
 	if err != nil {
 		panic(err)
 	}
-	os.Mkdir(path.Join(tempdir, baseUrl), os.FileMode(0755))
 	s.TempDir = tempdir
 }
 
@@ -43,7 +40,7 @@ func (s *MemeGenTestSuite) SetupTest() {
 		OutputPath: s.TempDir,
 		ImgPath:    baseImgPath,
 		FontName:   fontName,
-		MemeURL:    baseUrl,
+		MemeURL:    baseMemeUrl,
 	}
 }
 
@@ -56,24 +53,23 @@ func (s *MemeGenTestSuite) TestUID() {
 	reader := strings.NewReader("")
 	r := httptest.NewRequest(http.MethodGet, "http://localhost/w/api.php?first=a&last=b", reader)
 	r1 := httptest.NewRequest(http.MethodGet, "http://localhost/w/api.php?last=b&first=a", reader)
-	
+
 	uid, err := s.Sut.UID(r)
 	s.Nil(err, "could not calculate the UID: %v", err)
-	
+
 	uid1, err := s.Sut.UID(r1)
 	s.Nil(err, "could not calculate the UID: %v", err)
 	s.Equal(uid, uid1, "expected the UIDs to be equal for the same query parameters")
-	
+
 	// But this is case-sensitive.
 	r1 = httptest.NewRequest(http.MethodGet, "http://localhost/w/api.php?last=b&First=a", reader)
-	
+
 	uid1, err = s.Sut.UID(r1)
 	s.Nil(err, "could not calculate the UID: %v", err)
 	s.NotEqual(uid, uid1, "expected the UIDs to be different for different capitalizations")
 }
 
 func (s *MemeGenTestSuite) TestListGifs() {
-	originalPath := s.Sut.ImgPath
 	var testCases = []struct {
 		Path        string
 		ContentType string
@@ -85,17 +81,19 @@ func (s *MemeGenTestSuite) TestListGifs() {
 	}
 	for _, tc := range testCases {
 		testName := fmt.Sprintf("Path: %s - ContentType: %s - Status: %s - Body: %s", tc.Path, tc.ContentType, tc.Status, tc.Body)
-		s.Run(testName, func(){
+		s.Run(testName, func() {
+			if tc.Path != "" {
+				s.Sut.ImgPath = tc.Path
+			}
+
 			req := httptest.NewRequest(http.MethodGet, "http://localhost/gifs", strings.NewReader(""))
 			req.Header.Set("Accept", "text/json")
 			rec := httptest.NewRecorder()
-			if tc.Path != "" {
-				s.Sut.ImgPath = tc.Path
-			} else {
-				s.Sut.ImgPath = originalPath
-			}
+
 			s.Sut.ListGifs(rec, req)
 			response := rec.Result()
+
+			s.Equal(tc.Status, response.Status)
 			if tc.ContentType != "" {
 				s.Equal([]string{tc.ContentType}, response.Header["Content-Type"])
 			}
@@ -105,7 +103,6 @@ func (s *MemeGenTestSuite) TestListGifs() {
 				s.Nil(err)
 				s.Equal(tc.Body, string(body))
 			}
-			s.Equal(tc.Status, response.Status)
 		})
 	}
 }
@@ -126,23 +123,21 @@ func (s *MemeGenTestSuite) TestMemeGenerate() {
 		s.Run(testName, func() {
 			req := httptest.NewRequest(http.MethodGet, tc.Uri, strings.NewReader(""))
 			rec := httptest.NewRecorder()
-	
+
 			s.Sut.MemeFromRequest(rec, req)
 			response := rec.Result()
-	
+
 			s.Equal(tc.StatusCode, response.StatusCode)
-			
 			if tc.FileGenerated {
-				uid, err := s.Sut.UID(req)
-				s.Nil(err)
-				filePath := path.Join(s.Sut.OutputPath, fmt.Sprintf("%s.gif", uid))
+				locationPrefix := "/" + baseMemeUrl + "/"
+				fileName := response.Header["Location"][0][len(locationPrefix):]
+				filePath := path.Join(s.TempDir, fileName)
 				s.FileExists(filePath)
-				s.Contains(response.Header["Location"][0], fmt.Sprintf("/url/%s", uid))
 			}
 		})
 	}
 }
 
 func TestMemeGenTestSuite(t *testing.T) {
-    suite.Run(t, new(MemeGenTestSuite))
+	suite.Run(t, new(MemeGenTestSuite))
 }
