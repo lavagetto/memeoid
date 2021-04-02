@@ -24,6 +24,7 @@ import (
 	"image/gif"
 	"image/jpeg"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"path"
@@ -47,6 +48,7 @@ type MemeHandler struct {
 	// MemeURL is the url at which the file will be served
 	MemeURL   string
 	templates *template.Template
+	Logger    *log.Logger
 }
 
 // LoadTemplates pre-parses the templates.
@@ -89,6 +91,7 @@ func (h *MemeHandler) jsonBanner(gifs *[]string, w http.ResponseWriter) {
 func (h *MemeHandler) htmlBanner(gifs *[]string, w http.ResponseWriter) {
 	err := h.templates.ExecuteTemplate(w, "banner.html.gotmpl", gifs)
 	if err != nil {
+		h.Logger.Printf("%v\n", err)
 		// Yes, this is a reference to the EasyTimeLine MediaWiki extension.
 		http.Error(w, "Bad data: maybe ploticus is not installed?", http.StatusInternalServerError)
 	}
@@ -123,6 +126,7 @@ func (h *MemeHandler) Form(w http.ResponseWriter, r *http.Request) {
 	}
 	err := h.templates.ExecuteTemplate(w, "generate.html.gotmpl", imageName)
 	if err != nil {
+		h.Logger.Printf("%v\n", err)
 		// Yes, this is a reference to... sigh.
 		http.Error(w, "General error: is restbase calling itself?", http.StatusInternalServerError)
 	}
@@ -188,6 +192,7 @@ func (h *MemeHandler) MemeFromRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	uid, err := h.UID(r)
 	if err != nil {
+		h.Logger.Printf("%v\n", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -202,16 +207,19 @@ func (h *MemeHandler) MemeFromRequest(w http.ResponseWriter, r *http.Request) {
 			h.FontName,
 		)
 		if err != nil {
+			h.Logger.Printf("%v\n", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		err = meme.Generate()
 		if err != nil {
+			h.Logger.Printf("%v\n", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		err = h.saveImage(meme.Gif, fullPath)
 		if err != nil {
+			h.Logger.Printf("%v\n", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -228,7 +236,6 @@ func (h *MemeHandler) memeExists(uid string) bool {
 
 // Preview returns a thumbnail, in jpeg format
 func (h *MemeHandler) Preview(w http.ResponseWriter, r *http.Request) {
-	fmt.Printf("In preview!")
 	vars := mux.Vars(r)
 	imageName := h.getImageFromRequest(w, r)
 	if imageName == "" {
@@ -246,11 +253,13 @@ func (h *MemeHandler) Preview(w http.ResponseWriter, r *http.Request) {
 	imgFullPath := path.Join(h.ImgPath, imageName)
 	tpl, err := img.SimpleTemplate(imgFullPath, h.FontName, 52.0, 8.0)
 	if err != nil {
+		h.Logger.Printf("%v\n", err)
 		http.Error(w, "error generating the thumbnail", http.StatusInternalServerError)
 		return
 	}
 	g, err := tpl.GetGif()
 	if err != nil {
+		h.Logger.Printf("%v\n", err)
 		http.Error(w, "error generating the thumbnail", http.StatusInternalServerError)
 		return
 	}
