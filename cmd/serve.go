@@ -18,19 +18,14 @@ limitations under the License.
 
 import (
 	"fmt"
-	"net/http"
+	"log"
 	"os"
-	"path"
 
 	"github.com/lavagetto/memeoid/api"
+	"github.com/lavagetto/memeoid/server"
 	"github.com/spf13/cobra"
 
-	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
-
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var gifDir string
@@ -45,72 +40,27 @@ var serveCmd = &cobra.Command{
 	Short: "An http server to generate memes on request.",
 	Long:  `At the moment memeoid only works with a local filesystem.`,
 	Run: func(cmd *cobra.Command, args []string) {
+		// Error logging.
+		// TODO: use it everywhere.
+		logger := log.New(os.Stderr, "[memeoid] ", log.LstdFlags)
 		ctl := api.Controller{
 			Handler: &api.MemeHandler{
 				ImgPath:    gifDir,
 				OutputPath: memeDir,
 				FontName:   fontName,
 				MemeURL:    "meme",
+				Logger:     logger,
 			},
 			Router: mux.NewRouter(),
 		}
-
-		ctl.StaticRoute("/gifs/", gifDir)
-		ctl.StaticRoute("/meme/", memeDir)
 		ctl.Load(tplPath)
-		// Add prometheus metrics
-		ctl.Router.Use(telemetryMiddleware)
-		ctl.Router.Path("/metrics").Handler(promhttp.Handler())
 
-		// Handle the root of the site with the controller
-		http.Handle("/", ctl.Router)
 		portStr := fmt.Sprintf(":%d", port)
-		// Setup logging
-		customLog := handlers.CombinedLoggingHandler(os.Stdout, http.DefaultServeMux)
-		if certPath != "" {
-			key := path.Join(certPath, "privkey.pem")
-			fullchain := path.Join(certPath, "fullchain.pem")
-			// Add an HSTS header
-			ctl.Router.Use(hstsMiddleware)
-			http.ListenAndServeTLS(portStr, fullchain, key, customLog)
-		} else {
-			http.ListenAndServe(portStr, customLog)
+		err := server.Serve(&ctl, certPath, portStr, logger)
+		if err != nil {
+			logger.Fatalf("%v\n", err)
 		}
 	},
-}
-
-var httpDuration = promauto.NewHistogramVec(
-	prometheus.HistogramOpts{
-		Name: "memeoid_http_duration_seconds",
-		Help: "Duration of http requests",
-	},
-	[]string{"path", "gif"},
-)
-
-func telemetryMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(
-		func(w http.ResponseWriter, r *http.Request) {
-			route := mux.CurrentRoute(r)
-			path, _ := route.GetPathTemplate()
-			v := mux.Vars(r)
-			gif := "-"
-			if g, ok := v["from"]; ok {
-				gif = g
-			}
-			timer := prometheus.NewTimer(httpDuration.WithLabelValues(path, gif))
-			next.ServeHTTP(w, r)
-			timer.ObserveDuration()
-		},
-	)
-}
-
-func hstsMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(
-		func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Strict-Transport-Security", "max-age=864000")
-			next.ServeHTTP(w, r)
-		},
-	)
 }
 
 func init() {
