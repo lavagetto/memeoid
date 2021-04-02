@@ -131,15 +131,13 @@ func (s *MemeGenTestSuite) TestMemeGenerate() {
 			response := rec.Result()
 			s.Equal(tc.StatusCode, response.StatusCode)
 			if tc.FileGenerated {
-				locationPrefix := fmt.Sprintf("/%s/", s.Sut.MemeUrl
+				locationPrefix := fmt.Sprintf("/%s/", baseMemeUrl)
 				locationHeader, ok := response.Header["Location"]
 				s.True(ok, "response should include a Location header")
 				s.NotEmpty(locationHeader, "response should include a Location header")
+				
 				// Extract location on disk from the Location Header
 				fileName := locationHeader[0][len(locationPrefix):]
-				
-				
-				fileName := response.Header["Location"][0][len(locationPrefix):]
 				filePath := path.Join(s.TempDir, fileName)
 				s.FileExists(filePath)
 			}
