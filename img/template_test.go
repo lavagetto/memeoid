@@ -10,6 +10,8 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
+// TODO: this struct is the same as image_test.go:ImageTestSuite
+// Refactoring might be taken into account in order to reduce code duplication
 type TemplateTestSuite struct {
 	suite.Suite
 	fontPath string
