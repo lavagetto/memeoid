@@ -76,7 +76,7 @@ func (s *MemeGenTestSuite) TestListGifs() {
 		Status      string
 		Body        string
 	}{
-		{"", "application/json", "200 OK", `["badfile.gif","earth.gif"]`},
+		{"", "application/json", "200 OK", `["badfile.gif","earth.gif","gagarin.gif"]`},
 		{"/nonexistent", "", "404 Not Found", ""},
 	}
 	for _, tc := range testCases {
@@ -91,7 +91,7 @@ func (s *MemeGenTestSuite) TestListGifs() {
 			rec := httptest.NewRecorder()
 
 			s.Sut.ListGifs(rec, req)
-			
+
 			response := rec.Result()
 			s.Equal(tc.Status, response.Status)
 			if tc.ContentType != "" {
@@ -116,9 +116,10 @@ func (s *MemeGenTestSuite) TestMemeGenerate() {
 		{"http://localhost/w/api.php", http.StatusBadRequest, false},
 		{"http://localhost/w/api.php?from=lala", http.StatusNotFound, false},
 		{"http://localhost/w/api.php?from=earth.gif", http.StatusBadRequest, false},
+		// earth.gif is a large, animated gif. We run a single render of it.
 		{"http://localhost/w/api.php?from=earth.gif&top=test", http.StatusPermanentRedirect, true},
-		{"http://localhost/w/api.php?from=earth.gif&bottom=test", http.StatusPermanentRedirect, true},
-		{"http://localhost/w/api.php?from=earth.gif&bottom=test&top=test", http.StatusPermanentRedirect, true},
+		{"http://localhost/w/api.php?from=gagarin.gif&bottom=test", http.StatusPermanentRedirect, true},
+		{"http://localhost/w/api.php?from=gagarin.gif&bottom=test&top=test", http.StatusPermanentRedirect, true},
 	}
 	for _, tc := range testCases {
 		testName := fmt.Sprintf("Uri: %s - StatusCode: %d - Genereate: %t", tc.Uri, tc.StatusCode, tc.FileGenerated)
@@ -127,7 +128,7 @@ func (s *MemeGenTestSuite) TestMemeGenerate() {
 			rec := httptest.NewRecorder()
 
 			s.Sut.MemeFromRequest(rec, req)
-			
+
 			response := rec.Result()
 			s.Equal(tc.StatusCode, response.StatusCode)
 			if tc.FileGenerated {
@@ -135,7 +136,7 @@ func (s *MemeGenTestSuite) TestMemeGenerate() {
 				locationHeader, ok := response.Header["Location"]
 				s.True(ok, "response should include a Location header")
 				s.NotEmpty(locationHeader, "response should include a Location header")
-				
+
 				// Extract location on disk from the Location Header
 				fileName := locationHeader[0][len(locationPrefix):]
 				filePath := path.Join(s.TempDir, fileName)
