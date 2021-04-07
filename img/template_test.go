@@ -34,7 +34,7 @@ func (s *TemplateTestSuite) createTemplate() MemeTemplate {
 	}
 	return MemeTemplate{
 		gifPath:     "fixtures/earth.gif",
-		boxes:       []TextBox{box},
+		Boxes:       []TextBox{box},
 		border:      0.1,
 		minFontSize: 8.0,
 		maxFontSize: 52.0,

@@ -21,6 +21,8 @@ import (
 	"image"
 	"image/gif"
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/flopp/go-findfont"
 )
@@ -32,7 +34,7 @@ import (
 type MemeTemplate struct {
 	gifPath     string
 	fontName    string
-	boxes       []TextBox
+	Boxes       []TextBox
 	border      float64
 	minFontSize float64
 	maxFontSize float64
@@ -52,13 +54,13 @@ func (tpl *MemeTemplate) GetGif() (*gif.GIF, error) {
 // GetMeme fills a template with the text strings provided
 func (tpl *MemeTemplate) GetMeme(text ...string) (*Meme, error) {
 	numText := len(text)
-	numBoxes := len(tpl.boxes)
+	numBoxes := len(tpl.Boxes)
 	// Copy the textboxes, we definitely don't want to deal with concurrency issues
 	memeBoxes := make([]TextBox, numBoxes)
 	if numText != numBoxes {
 		return nil, fmt.Errorf("%d text pieces were given, but %d expected", numText, numBoxes)
 	}
-	for i, box := range tpl.boxes {
+	for i, box := range tpl.Boxes {
 		err := box.SetText(text[i], tpl.maxFontSize, tpl.minFontSize)
 		if err != nil {
 			return nil, err
@@ -113,7 +115,7 @@ func SimpleTemplate(imgPath string, fontName string, maxFontSize float64, minFon
 		FontPath:         fontPath,
 		LineSpacingRatio: tpl.lineSpacing,
 	}
-	tpl.boxes = []TextBox{topBox, bottomBox}
+	tpl.Boxes = []TextBox{topBox, bottomBox}
 	return &tpl, err
 }
 
@@ -124,4 +126,60 @@ func MemeFromFile(path string, top string, bottom string, fontName string) (*Mem
 		return nil, err
 	}
 	return tpl.GetMeme(top, bottom)
+}
+
+type BoxData struct {
+	X      int `json:"x"`
+	Y      int `json:"y"`
+	Width  int `json:"width"`
+	Length int `json:"length"`
+}
+
+func NewBoxDataFromQuery(enc string) (BoxData, error) {
+	var int_values [4]int
+	for i, val := range strings.Split(enc, "|") {
+		v, err := strconv.Atoi(val)
+		if err != nil {
+			return BoxData{}, err
+		}
+		int_values[i] = v
+	}
+	return BoxData{
+		X:      int_values[0],
+		Y:      int_values[1],
+		Width:  int_values[2],
+		Length: int_values[3],
+	}, nil
+}
+
+type MemeRequest struct {
+	From  string    `json:"from"`
+	Boxes []BoxData `json:"boxes"`
+	Texts []string  `json:"texts"`
+}
+
+// MemeFromRequest generates a meme using the template data provided.
+func MemeFromRequest(memeReq *MemeRequest, fontName string) (*Meme, error) {
+	fontPath, err := findfont.Find(fontName)
+	if err != nil {
+		return nil, err
+	}
+	tpl := MemeTemplate{
+		gifPath:     memeReq.From,
+		minFontSize: 8.0,
+		maxFontSize: 52.0,
+		border:      0.01,
+		lineSpacing: 0.3,
+	}
+	for _, box := range memeReq.Boxes {
+		txt := TextBox{
+			Width:            box.Width,
+			Height:           box.Length,
+			Center:           image.Point{box.X, box.Y},
+			FontPath:         fontPath,
+			LineSpacingRatio: tpl.lineSpacing,
+		}
+		tpl.Boxes = append(tpl.Boxes, txt)
+	}
+	return tpl.GetMeme(memeReq.Texts...)
 }

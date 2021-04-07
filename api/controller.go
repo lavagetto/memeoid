@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"net/http"
+	"path"
 
 	"github.com/gorilla/mux"
 )
@@ -41,6 +42,10 @@ func (r *Controller) Load(tplPath string) {
 	r.routeFor("/w/api.php", r.Handler.MemeFromRequest, true, "GET")
 	// Thumbnails
 	r.Router.Path("/thumb/{width:[0-9]+}x{height:[0-9]+}/{from}").Methods("GET", "HEAD").HandlerFunc(r.Handler.Preview)
+	// Static assets (js, css)
+	assets := path.Join(tplPath, "static")
+	fmt.Println(assets)
+	r.StaticRoute("/assets", assets)
 }
 
 // StaticRoute sets up a static route
