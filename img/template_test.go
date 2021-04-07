@@ -26,15 +26,15 @@ func (s *TemplateTestSuite) SetupSuite() {
 }
 
 func (s TemplateTestSuite) createTemplate() MemeTemplate {
-	box := TextBox {
+	box := TextBox{
 		Width:    100,
 		Height:   50,
 		Center:   image.Point{200, 200},
 		FontPath: s.fontPath,
 	}
-	return MemeTemplate {
+	return MemeTemplate{
 		gifPath:     "fixtures/earth.gif",
-		boxes:       []TextBox{box},
+		Boxes:       []TextBox{box},
 		border:      0.1,
 		minFontSize: 8.0,
 		maxFontSize: 52.0,
@@ -64,7 +64,7 @@ func (s *TemplateTestSuite) TestGetMeme() {
 func (s *TemplateTestSuite) TestCorruptedSourceFile() {
 	sut := s.createTemplate()
 	sut.gifPath = "fixtures/badfile.gif"
-	
+
 	_, err := sut.GetMeme("test")
 
 	s.Error(err, "Should not generate a meme if the gif is corrupted")
@@ -72,8 +72,8 @@ func (s *TemplateTestSuite) TestCorruptedSourceFile() {
 
 func (s *TemplateTestSuite) TestGetGif() {
 	var testGetGif = []struct {
-		path     string
-		isError  bool
+		path    string
+		isError bool
 	}{
 		{"fixtures/earth.gif", false},
 		{"fixtures/non-existent.gif", true},
@@ -82,10 +82,10 @@ func (s *TemplateTestSuite) TestGetGif() {
 	for _, tc := range testGetGif {
 		testName := fmt.Sprintf("path: %s - err: %t", tc.path, tc.isError)
 		s.Run(testName, func() {
-			sut := MemeTemplate{ gifPath: tc.path }
-			
+			sut := MemeTemplate{gifPath: tc.path}
+
 			_, err := sut.GetGif()
-			
+
 			if tc.isError && err == nil {
 				s.Errorf(nil, "test loading %s should have generated an error: %v", tc.path, err)
 			}

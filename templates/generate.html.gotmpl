@@ -4,31 +4,41 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Memeoid home page</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.1/css/bulma.min.css">
+    <link rel="stylesheet" href="/assets/bulma.min.css">
+    <script src="./assets/box.js"></script>
+    <script src="./assets/generate.js"></script>
   </head>
     <body>
         <div class="container">
             <h1 class="title">Generate your meme!</h1>
             <div class="content">
                 <figure>
-                    <img src="/gifs/{{ . }}" />
+                    <canvas width="{{ .Width }}" height="{{ .Length }}" id="tpl"></canvas>
                 </figure>
-                <p>Add top or bottom text to this gif!</p>
-                <form method="GET" action="/w/api.php">
-                    <input type="hidden" name="from" value="{{ . }}">
-                    <div class="field">
-                        <label class="label">Top</label>
-                        <input class="input" type="text" name="top" id="top" placeholder="Top text">
-                    </div>
-                    <div class="field">
-                        <label class="label">Bottom</label>
-                        <input class="input" type="text" name="bottom" id="bottom" placeholder="Bottom text">
-                    </div>
+                <p>You can resize, move, add text areas. Remove one by pressing 'Esc'.</p>
+                <form id="template-form" method="GET" action="/w/api.php">
+                    <input type="hidden" name="from" value="{{ .ImgName }}">
+                    <div id="text-boxes"></div>
                     <div class="control">
                                 <button class="button is-primary">Submit</button>
-                    </div>    
+                    </div>
                 </form>
             </div>
         </div>
     </body>
+    <script type="text/javascript">
+        var imgName = "{{ .ImgName }}";
+        var boxWidth = {{ .BoxWidth }};
+        var boxLength = {{ .BoxLength }};
+        var topC = new Point({{.Top.X}}, {{.Top.Y}});
+        var botC = new Point({{.Bottom.X}}, {{.Bottom.Y}});
+        var linewidth = 10;
+        var container = new BoxContainer("tpl", "/gifs/" + imgName);
+        container.element.addEventListener("box-added", saveHook, false);
+        container.element.addEventListener("box-removed", removeHook(container), false);
+        container.addBox(topC, boxWidth, boxLength);
+        container.addBox(botC, boxWidth, boxLength);
+        var form = document.getElementById("template-form");
+        form.addEventListener("submit", memeCheckAndSubmit(container, imgName), false);
+    </script>
 </html>

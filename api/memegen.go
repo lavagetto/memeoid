@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"image"
 	"image/gif"
 	"image/jpeg"
 	"io/ioutil"
@@ -98,13 +99,11 @@ func (h *MemeHandler) htmlBanner(gifs *[]string, w http.ResponseWriter) {
 }
 
 func (h *MemeHandler) getImageFromRequest(w http.ResponseWriter, r *http.Request) string {
-	// vars := mux.Vars(r)
-	// imageName, ok := vars["from"]
-	// if !ok {
-	// 	http.Error(w, "missing 'from' parameter", http.StatusBadRequest)
-	// 	return ""
-	// }
-	imageName := r.FormValue("from")
+	vars := mux.Vars(r)
+	imageName, ok := vars["from"]
+	if !ok {
+		imageName = r.FormValue("from")
+	}
 	if imageName == "" {
 		http.Error(w, "missing 'from' parameter", http.StatusBadRequest)
 		return ""
@@ -124,7 +123,36 @@ func (h *MemeHandler) Form(w http.ResponseWriter, r *http.Request) {
 	if imageName == "" {
 		return
 	}
-	err := h.templates.ExecuteTemplate(w, "generate.html.gotmpl", imageName)
+	// We need to create the SimpleTemplate to define the two
+	// default boxes.
+	imgFullPath := path.Join(h.ImgPath, imageName)
+	tpl, err := img.SimpleTemplate(imgFullPath, h.FontName, 30.0, 20.0)
+	if err != nil {
+		h.Logger.Printf("%v\n", err)
+		http.Error(w, "Look, I'm sure you can always fix this with more DDD patterns.", http.StatusInternalServerError)
+		return
+	}
+	g, err := tpl.GetGif()
+	if err != nil {
+		h.Logger.Printf("%v\n", err)
+		http.Error(w, "If we used a magical Turing tape, such things wouldn't happen.", http.StatusInternalServerError)
+		return
+	}
+	size := g.Image[0].Bounds()
+	data := struct {
+		ImgName                            string
+		Width, Length, BoxWidth, BoxLength int
+		Top, Bottom                        image.Point
+	}{
+		imageName,
+		size.Dx(),
+		size.Dy(),
+		tpl.Boxes[0].Width,
+		tpl.Boxes[0].Height,
+		tpl.Boxes[0].Center,
+		tpl.Boxes[1].Center,
+	}
+	err = h.templates.ExecuteTemplate(w, "generate.html.gotmpl", data)
 	if err != nil {
 		h.Logger.Printf("%v\n", err)
 		// Yes, this is a reference to... sigh.
@@ -152,7 +180,7 @@ func (h *MemeHandler) ListGifs(w http.ResponseWriter, r *http.Request) {
 }
 
 // UID returns the unique ID of the requested gif. This is determined
-// by a combination of the image name and the text (top and bottom)
+// by a combination of the image name and the text boxes.
 func (h *MemeHandler) UID(r *http.Request) (string, error) {
 	// Get a sorted version of the request parameters
 	uid := []byte(r.URL.Query().Encode())
@@ -184,12 +212,19 @@ func (h *MemeHandler) MemeFromRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	imgFullPath := path.Join(h.ImgPath, imageName)
 	qs := r.URL.Query()
-	top := qs.Get("top")
-	bottom := qs.Get("bottom")
-	if top == "" && bottom == "" {
-		http.Error(w, "neither 'top' nor 'bottom' provided", http.StatusBadRequest)
-		return
+	var bd []img.BoxData
+	if boxes, ok := qs["box"]; ok {
+		for _, box := range boxes {
+			box, err := img.NewBoxDataFromQuery(box)
+			if err != nil {
+				http.Error(w, "invalid template data.", http.StatusBadRequest)
+				return
+			}
+			bd = append(bd, box)
+
+		}
 	}
+	memeReq := &img.MemeRequest{From: imgFullPath, Texts: qs["box-text"], Boxes: bd}
 	uid, err := h.UID(r)
 	if err != nil {
 		h.Logger.Printf("%v\n", err)
@@ -200,10 +235,8 @@ func (h *MemeHandler) MemeFromRequest(w http.ResponseWriter, r *http.Request) {
 	// just redirect. Else generate the file and redirect
 	fullPath := path.Join(h.OutputPath, fmt.Sprintf("%s.gif", uid))
 	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
-		meme, err := img.MemeFromFile(
-			imgFullPath,
-			top,
-			bottom,
+		meme, err := img.MemeFromRequest(
+			memeReq,
 			h.FontName,
 		)
 		if err != nil {
