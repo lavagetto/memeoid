@@ -1,8 +1,21 @@
-// TODO: modify the save hook into custom events using CustomEvent
+// Classes to manage drawing rectangles on an HTML canvas,
+// And drag/resize/remove them
+/**
+ * TODO List:
+ * - Use addBox everywhere
+ * - Get rid of tmpBox, it's useless and complicating the code
+ * - Modify mouse pointer when on the anchors.
+ * - Make events closures and get rid of that ugly var cls = this. yuck.
+g */
 
-
-// Container of all boxes
 class BoxContainer {
+    /**
+     * 
+     * @param {string} id the id of the canvas element
+     * @param {string} imgurl The url of the image to use as a canvas background.
+     * @param {*} lineOffset The size of the rectangle walls. 4 by default.
+     * @returns {BoxContainer}
+     */
     constructor(id, imgurl, lineOffset = 4) {
         this.boxes = [];
         this.element = document.getElementById(id);
@@ -23,12 +36,18 @@ class BoxContainer {
         this.image.onload = this.imgDraw();
         this.registerEvents();
     }
-
+    /**
+     * Function helper for drawing in the canvas on image load.
+     * @returns {function} A closure that triggers a redraw.
+     */
     imgDraw() {
         var cls = this;
         return function () { cls.redraw(); }
     }
-
+    /**
+     * Re-draws the image and the rectangles in the canvas.
+     * @returns null
+     */
     redraw() {
         if (!this.element) {
             console.log("Cannot redraw boxes");
@@ -52,8 +71,12 @@ class BoxContainer {
         }
     }
 
-    // Get the current box into this.selected,
-    // or create a new tmpbox. Then return it.
+    /**
+     * Get the current box into this.selected, or create a new tmpbox. Then return it.
+     * @param {int} x The x coordinate of the point at which to select (optional)
+     * @param {int} y The y coordinate of the point at which to select (optional)
+     * @returns Box
+     */
     getCurrentBox(x = -1, y = -1) {
         // First let's check if we have a selected box. If we do, return that.
         if (this.selected.boxId > -1) {
@@ -81,6 +104,12 @@ class BoxContainer {
         return this.tmpBox;
     };
 
+    /**
+     * Add a box of given dimensions at a specific point.
+     * @param {Point} center The center of the box to add
+     * @param {int} w the width of the box
+     * @param {int} l the length of the box
+     */
     addBox(center, w, l) {
         var hw = Math.ceil(w / 2);
         var hl = Math.ceil(l / 2);
@@ -94,7 +123,9 @@ class BoxContainer {
         this.redraw();
     }
 
-
+    /**
+     * Register events to handle box resizing.
+     */
     registerEvents() {
         // We want to reference the class inside the closures.
         var cls = this
