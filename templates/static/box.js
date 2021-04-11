@@ -2,10 +2,16 @@
 // And drag/resize/remove them
 /**
  * TODO List:
- * - Modify mouse pointer when on the anchors.
- * - Make events closures and get rid of that ugly var cls = this. yuck.
+ * - Better box labels
  */
 
+/**
+ * BoxContainer manages drawing, dragging, resizing rectangles over
+ * an image, in an html canvas.
+ * 
+ * When a box is added an event "box-added" is emitted, and when it gets removed
+ * a "box-removed" event is emitted.
+ */
 class BoxContainer {
     /**
      * 
@@ -31,17 +37,10 @@ class BoxContainer {
         // Load and draw image
         this.image = new Image();
         this.image.src = imgurl;
-        this.image.onload = this.imgDraw();
+        this.image.onload = this.redraw.bind(this);
         this.registerEvents();
     }
-    /**
-     * Function helper for drawing in the canvas on image load.
-     * @returns {function} A closure that triggers a redraw.
-     */
-    imgDraw() {
-        var cls = this;
-        return function () { cls.redraw(); }
-    }
+
     /**
      * Re-draws the image and the rectangles in the canvas.
      * @returns null
@@ -72,7 +71,7 @@ class BoxContainer {
      */
     getCurrentBox(x = -1, y = -1) {
         // First let's check if we have a selected box. If we do, return that.
-        if (this.selected.boxId > -1) {
+        if (this.selected.inBox()) {
             return this.boxes[this.selected.boxId];
         }
         // Now if x or y are not > -1, we want to bail out.
@@ -94,7 +93,7 @@ class BoxContainer {
         this.addBox(point, 0, 0);
         this.isCreatingBox = true;
         // We've selected the new box, and we're dragging it from the bottom right.
-        this.selected = new SelectedArea(this.boxes.length - 1, 'br');
+        this.selected = new SelectedArea(this.boxes.length - 1, 'se');
         // Now return it.
         return this.boxes[this.selected.boxId];
     };
@@ -118,11 +117,180 @@ class BoxContainer {
         this.redraw();
     }
 
+
+    /**
+     * Register events to handle box resizing.
+     */
+    registerEvents() {
+        // Click the mouse. Create a new box if none is selected.
+        // If one is selected, highlight it.
+        this.element.onmousedown = this.mouseDown.bind(this);
+
+        // Release the mouse.
+        // If we started inside the canvas, we want to 
+        // add the temporary box to the image.
+        // If not, just clear selection and remove the mousedown
+        this.element.onmouseup = this.mouseUp.bind(this);
+
+        // The mouse is moved outside of the canvas.
+        // if a temporary box was created, it's discarded.
+        this.element.onmouseout = this.mouseOut.bind(this);
+
+        // The mouse is moved inside the element.
+        // If a new box is present, the x2,y2 coordinates are changed.
+        // If a box is present and it's being dragged, it gets moved.
+        // else, it's resized based on which anchor is selected.
+        this.element.onmousemove = this.mouseMove.bind(this);
+
+        // Allow removing a box using escape
+        window.addEventListener("keydown", this.keyPress.bind(this), false);
+    }
+
+    /**
+     * Event handler for mouse being clicked.
+     * @param {event} e
+     * @private
+     */
+    mouseDown(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        // We don't need relative coordinates here, as we're not using
+        // it to draw shapes but just to calculate motion.
+        this.mousedown = new Point(e.offsetX, e.offsetY);
+        // select the box at the current position.
+        this.getCurrentBox(e.offsetX, e.offsetY);
+        this.setCursorStyle(e);
+        // Redraw to show the selection
+        this.redraw();
+    }
+    /**
+     * Event handler for mouse being released.
+     * @param {event} e
+     * @private
+     */
+    mouseUp(e) {
+        if (this.mousedown == null) { return; }
+        e.preventDefault();
+        e.stopPropagation();
+        this.clearSelection();
+        this.setCursorStyle(e);
+    }
+
+    /**
+     * Event handler for the mouse exiting the canvas.
+     * @param {event} e
+     * @private
+     */
+    mouseOut(e) {
+        if (this.mousedown == null) { return; }
+        e.preventDefault();
+        e.stopPropagation();
+        // Remove a box that's being created.
+        if (this.isCreatingBox) {
+            this.removeSelectedBox();
+        } else {
+            // else just clear the selection.
+            this.clearSelection();
+        }
+    }
+
+    /**
+     * Event handler for the mouse moving on the canvas.
+     * @param {event} e
+     * @private
+     */
+    mouseMove(e) {
+        // We always want to check if we need to change the pointer
+        // unless we're in an action.
+        if (this.mousedown == null) {
+            this.setCursorStyle(e);
+            return;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        var position = new Point(e.offsetX, e.offsetY);
+        var box = this.getCurrentBox();
+        if (box != null) {
+            if (this.isCreatingBox) {
+                box.x2 = position.x;
+                box.y2 = position.y;
+            } else {
+                var offset = position.sub(this.mousedown);
+                box.move(this.selected.position, offset);
+            }
+        }
+        // Reset the previous mouse position to the new value.
+        this.mousedown = position;
+        this.redraw();
+    }
+
+    /**
+     * Event handler for keypress.
+     * @param {event} e
+     * @private
+     */
+    keyPress(e) {
+        if (this.mousedown == null) { return; }
+        if (e.key == "Escape") {
+            this.removeSelectedBox();
+            this.setCursorStyle(e);
+        };
+    }
+
+
+    /**
+     * Set the style of the mouse cursor.
+     * @param {event} e
+     * @private
+     */
+    setCursorStyle(e) {
+        // If we've selected a box, we want to return the handle
+        // for that box.
+        if (this.selected.inBox()) {
+            this._setMouseStyle(this.selected.position);
+            return;
+        }
+        var point = new Point(e.offsetX, e.offsetY);
+        for (var i = 0; i < this.boxes.length; i++) {
+            let position = this.boxes[i].getPosition(point);
+            if (position != 'o') {
+                this._setMouseStyle(position);
+                // We break out as the first box matching will also be
+                // the one selected if the user clicks.
+                return;
+            }
+        }
+        // We found no match.
+        this._setMouseStyle('o');
+    }
+
+    /**
+     * @param {string} position position identifier
+     * @private
+     */
+    _setMouseStyle(position) {
+        var mouseStyle = 'default';
+        switch (position) {
+            case 'i':
+                if (this.mousedown !== null) {
+                    mouseStyle = 'move';
+                }
+                break;
+            case 'o':
+                break;
+            default:
+                mouseStyle = position + '-resize';
+                break;
+        }
+        this.element.style.cursor = mouseStyle;
+    }
+
     /**
      * Removes the currently selected box.
+     * @private
      */
     removeSelectedBox() {
-        if (this.selected.boxId > -1) {
+        if (this.selected.inBox()) {
             this.boxes.splice(this.selected.boxId, 1);
             let ev = new CustomEvent('box-removed', { detail: this.selected.boxId });
             this.element.dispatchEvent(ev);
@@ -132,6 +300,7 @@ class BoxContainer {
 
     /**
      * Clears all state once we've removed selections.
+     * @private
      */
     clearSelection() {
         this.mousedown = null;
@@ -139,95 +308,8 @@ class BoxContainer {
         this.isCreatingBox = false;
         this.redraw();
     }
-
-    /**
-     * Register events to handle box resizing.
-     */
-    registerEvents() {
-        // We want to reference the class inside the closures.
-        var cls = this
-        // Click the mouse. Create a new box if none is selected.
-        // If one is selected,
-        this.element.onmousedown = function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-            // We don't need relative coordinates here, as we're not using
-            // it to draw shapes but just to calculate motion.
-            cls.mousedown = new Point(e.offsetX, e.offsetY);
-            // select the box at the current position.
-            cls.getCurrentBox(e.offsetX, e.offsetY);
-            // Redraw to show the selection
-            cls.redraw();
-        }
-
-        // Release the mouse.
-        // If we started inside the canvas, we want to 
-        // add the temporary box to the image.
-        // If not, just clear selection and remove the mousedown
-        this.element.onmouseup = function (e) {
-            if (cls.mousedown == null) { return; }
-            e.preventDefault();
-            e.stopPropagation();
-            cls.clearSelection();
-        }
-
-        // The mouse is moved outside of the canvas.
-        // if a temporary box was created, it's discarded.
-        this.element.onmouseout = function (e) {
-            if (cls.mousedown == null) { return; }
-            e.preventDefault();
-            e.stopPropagation();
-            // Remove a box that's being created.
-            if (cls.isCreatingBox) {
-                cls.removeSelectedBox();
-            } else {
-                // else just clear the selection.
-                cls.clearSelection();
-            }
-        }
-
-        // The mouse is moved inside the element.
-        // If a temporary box is present, the x2,y2 coordinates are changed.
-        // If a box is present and it's being dragged, it gets moved.
-        // else, it's resized based on which anchor is selected.
-        this.element.onmousemove = function (e) {
-            if (cls.mousedown == null) { return; }
-            e.preventDefault();
-            e.stopPropagation();
-            var position = new Point(e.offsetX, e.offsetY);
-            var box = cls.getCurrentBox();
-            if (box != null) {
-                if (cls.isCreatingBox) {
-                    box.x2 = position.x;
-                    box.y2 = position.y;
-                } else {
-                    var offset = position.sub(cls.mousedown);
-                    box.move(cls.selected.position, offset);
-                }
-            }
-            // Reset the previous mouse position to the new value.
-            cls.mousedown = position;
-            cls.redraw();
-        }
-
-        // Allow removing a box using escape
-        window.addEventListener("keydown",
-            function (e) {
-                if (cls.mousedown == null) { return; }
-                if (e.key == "Escape") {
-                    if (cls.selected.boxId > -1) {
-                        cls.boxes.splice(cls.selected.boxId, 1);
-                        let ev = new CustomEvent('box-removed', { detail: cls.selected.boxId });
-                        cls.element.dispatchEvent(ev);
-                    }
-                    cls.mousedown = null;
-                    cls.selected = new SelectedArea();
-                    cls.redraw();
-                };
-            },
-            true);
-    }
 }
+
 
 /** Class representing a box */
 class Box {
@@ -253,25 +335,6 @@ class Box {
         this.lineOffset = lineOffset;
         this.lineWidth = lineWidth;
         this.color = color;
-    }
-
-    /**
-     * Ensures the top-left vertex is in (x1, y1)
-     * and the bottom-right one is in (x2, y2)
-     * Also calculates the center of the rectangle.
-     */
-    fixCoordinates() {
-        if (this.x1 > this.x2) {
-            var swap = this.x1;
-            this.x1 = this.x2;
-            this.x2 = swap;
-        }
-        if (this.y1 > this.y2) {
-            var swap = this.y1;
-            this.y1 = this.y2;
-            this.y2 = swap;
-        }
-        this.center = new Point((this.x1 + this.x2) / 2, (this.y1 + this.y2) / 2);
     }
 
     /**
@@ -323,34 +386,29 @@ class Box {
         // Note: this could be made slightly more efficient,
         // at the cost of readability.
         if (this.isLeft(p)) {
-            position = 'l';
+            position = 'w';
         } else if (this.isRight(p)) {
-            position = 'r';
-        } else if (this.isXcentered(p)) {
-            // If we're in the middle of the square horizontally.
-            // we don't have a specific position
-            position = ''
+            position = 'e';
         }
+        var isInHandle = position || this.isXcentered(p);
         // If a match was found, we also want to find the vertical
         // position.
-        if (this.isTop(p)) {
-            return 't' + position;
-        } else if (this.isYcentered(p) && position) {
-            // We don't have a anchor at the center of the square
-            // So we need to check we weren't at the center on the X axis too.
+        if (isInHandle) {
+            if (this.isTop(p)) { // Top 3 handles
+                return 'n' + position;
+            } else if (this.isBottom(p)) { // Bottom 3 handles
+                return 's' + position;
+            }
+        }
+        if (position && this.isYcentered(p)) { // Left and Right handle
             return position;
-        } else if (this.isBottom(p)) {
-            return 'b' + position;
         }
-        // If we reach here, we just need to check if we're inside or
-        // outside of the box.
+        // We're not in a handle, let's check if we're inside or outside the rectangle.
         if (this.isInside(p)) {
-            // if we're inside the figure, but nowhere 
+            // if we're inside the figure, but nowhere near a handle.
             return 'i';
-        } else {
-            // We're outside of the circle.
-            return 'o';
         }
+        return 'o';
     }
 
     /**
@@ -367,15 +425,15 @@ class Box {
             this.y2 += offset.y;
         } else {
             // left or right shift
-            if (position.includes('l')) {
+            if (position.includes('w')) {
                 this.x1 += offset.x;
-            } else if (position.includes('r')) {
+            } else if (position.includes('e')) {
                 this.x2 += offset.x;
             }
             // top or bottom shift
-            if (position.includes('t')) {
+            if (position.includes('n')) {
                 this.y1 += offset.y;
-            } else if (position.includes('b')) {
+            } else if (position.includes('s')) {
                 this.y2 += offset.y;
             }
         }
@@ -383,50 +441,87 @@ class Box {
         this.fixCoordinates();
     }
     /** "Private" methods */
+
+
     /**
-     * Adds a qualifier for the vertical position to the point.
-     * @param {Point} p The point we're checking
-     * @param {string} suffix The horizontal position qualifier
-     * @returns {string} the resulting position.
+     * Ensures the top-left vertex is in (x1, y1)
+     * and the bottom-right one is in (x2, y2)
+     * Also calculates the center of the rectangle.
+     * @private
      */
-    _setVerticalPos(p, suffix) {
-        if (this.isTop(p)) {
-            return 't' + suffix;
+    fixCoordinates() {
+        if (this.x1 > this.x2) {
+            var swap = this.x1;
+            this.x1 = this.x2;
+            this.x2 = swap;
         }
-        if (this.isYcentered(p)) {
-            return suffix;
+        if (this.y1 > this.y2) {
+            var swap = this.y1;
+            this.y1 = this.y2;
+            this.y2 = swap;
         }
-        if (this.isBottom(p)) {
-            return 'b' + suffix;
-        }
-        // We're outside the box vertically.
-        return 'o';
+        this.center = new Point((this.x1 + this.x2) / 2, (this.y1 + this.y2) / 2);
     }
 
+    /**
+     * @param {Point} p The point to check
+     * @returns bool
+     * @private
+     */
     isLeft(p) {
         return (Math.abs(p.x - this.x1) < this.lineOffset);
     }
 
+    /**
+     * @param {Point} p The point to check
+     * @returns bool
+     * @private
+     */
     isRight(p) {
         return (Math.abs(p.x - this.x2) < this.lineOffset);
     }
 
+    /**
+     * @param {Point} p The point to check
+     * @returns bool
+     * @private
+     */
     isTop(p) {
         return (Math.abs(p.y - this.y1) < this.lineOffset);
     }
 
+    /**
+     * @param {Point} p The point to check
+     * @returns bool
+     * @private
+     */
     isBottom(p) {
         return (Math.abs(p.y - this.y2) < this.lineOffset);
     }
 
+    /**
+     * @param {Point} p The point to check
+     * @returns bool
+     * @private
+     */
     isXcentered(p) {
         return (Math.abs(p.x - this.center.x) < this.lineOffset);
     }
 
+    /**
+     * @param {Point} p The point to check
+     * @returns bool
+     * @private
+     */
     isYcentered(p) {
         return (Math.abs(p.y - this.center.y) < this.lineOffset);
     }
 
+    /**
+     * @param {Point} p The point to check
+     * @returns bool
+     * @private
+     */
     isInside(p) {
         return (this.x1 - this.lineOffset < p.x &&
             this.x2 + this.lineOffset > p.x &&
@@ -435,32 +530,41 @@ class Box {
     }
 }
 
-// Selection management.
+/** Selection management. */
 class SelectedArea {
+    /**
+     * 
+     * @param {int} boxId the index of the selected box.
+     * @param {string} pos the position at which the box was selected.
+     */
     constructor(boxId = -1, pos = 'o') {
         this.boxId = boxId;
         this.position = pos;
     }
 
-    getBox(boxes) {
-        if (this.notInBox()) {
-            return null
-        } else {
-            return boxes[this.boxId];
-        }
-    }
-
-    notInBox() {
-        return (this.boxId == -1);
+    /**
+     * Checks if a box is selected.
+     * @returns boolean
+     */
+    inBox() {
+        return (this.boxId > -1);
     }
 }
 
+/**
+ * Point on the canvas.
+ */
 class Point {
     constructor(x, y) {
         this.x = x;
         this.y = y;
     }
 
+    /**
+     * Subtracts points. This works as a vector subtraction.
+     * @param {Point} p the point to subtract.
+     * @returns 
+     */
     sub(p) {
         return new Point(this.x - p.x, this.y - p.y);
     }

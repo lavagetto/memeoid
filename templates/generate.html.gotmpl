@@ -33,7 +33,7 @@
         var topC = new Point({{.Top.X}}, {{.Top.Y}});
         var botC = new Point({{.Bottom.X}}, {{.Bottom.Y}});
         var linewidth = 10;
-        var container = new BoxContainer("tpl", "/gifs/" + imgName);
+        var container = new BoxContainer("tpl", "/gifs/" + imgName, linewidth);
         container.element.addEventListener("box-added", saveHook, false);
         container.element.addEventListener("box-removed", removeHook(container), false);
         container.addBox(topC, boxWidth, boxLength);
