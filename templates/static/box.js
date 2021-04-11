@@ -2,11 +2,9 @@
 // And drag/resize/remove them
 /**
  * TODO List:
- * - Use addBox everywhere
- * - Get rid of tmpBox, it's useless and complicating the code
  * - Modify mouse pointer when on the anchors.
  * - Make events closures and get rid of that ugly var cls = this. yuck.
-g */
+ */
 
 class BoxContainer {
     /**
@@ -18,6 +16,7 @@ class BoxContainer {
      */
     constructor(id, imgurl, lineOffset = 4) {
         this.boxes = [];
+        this.isCreatingBox = false;
         this.element = document.getElementById(id);
         if (this.element == null) {
             // TODO: error handling
@@ -29,7 +28,6 @@ class BoxContainer {
         this.color = 'lightgrey';
         this.selected = new SelectedArea();
         this.mousedown = null;
-        this.tmpBox = null;
         // Load and draw image
         this.image = new Image();
         this.image.src = imgurl;
@@ -64,11 +62,6 @@ class BoxContainer {
             }
             box.drawOn(this.context, i + 1, overrideColor);
         }
-        // check for any new box being drawn, and draw them.
-        // A new box is always cadetblue as we're drawing it.
-        if (this.tmpBox != null) {
-            this.tmpBox.drawOn(this.context, '', 'cadetblue');
-        }
     }
 
     /**
@@ -81,8 +74,6 @@ class BoxContainer {
         // First let's check if we have a selected box. If we do, return that.
         if (this.selected.boxId > -1) {
             return this.boxes[this.selected.boxId];
-        } else if (this.tmpBox != null) {
-            return this.tmpBox;
         }
         // Now if x or y are not > -1, we want to bail out.
         if (x < 0 || y < 0) {
@@ -97,11 +88,15 @@ class BoxContainer {
                 return this.boxes[i]
             }
         }
-        // No boxes were found. reset this.selected
-        this.selected = new SelectedArea();
-        // Now return a new tmp box if not present.
-        this.tmpBox = new Box(x, y, x, y, this.lineWidth, this.lineOffset, this.color);
-        return this.tmpBox;
+        // No boxes were found. We're creating a new one. Let's generate it, and make
+        // it selected.
+        // We add a box that has center at the point and no dimensions.
+        this.addBox(point, 0, 0);
+        this.isCreatingBox = true;
+        // We've selected the new box, and we're dragging it from the bottom right.
+        this.selected = new SelectedArea(this.boxes.length - 1, 'br');
+        // Now return it.
+        return this.boxes[this.selected.boxId];
     };
 
     /**
@@ -120,6 +115,28 @@ class BoxContainer {
         this.boxes.push(box);
         let ev = new CustomEvent('box-added', { detail: (this.boxes.length - 1) });
         this.element.dispatchEvent(ev);
+        this.redraw();
+    }
+
+    /**
+     * Removes the currently selected box.
+     */
+    removeSelectedBox() {
+        if (this.selected.boxId > -1) {
+            this.boxes.splice(this.selected.boxId, 1);
+            let ev = new CustomEvent('box-removed', { detail: this.selected.boxId });
+            this.element.dispatchEvent(ev);
+        }
+        this.clearSelection();
+    }
+
+    /**
+     * Clears all state once we've removed selections.
+     */
+    clearSelection() {
+        this.mousedown = null;
+        this.selected = new SelectedArea();
+        this.isCreatingBox = false;
         this.redraw();
     }
 
@@ -151,21 +168,7 @@ class BoxContainer {
             if (cls.mousedown == null) { return; }
             e.preventDefault();
             e.stopPropagation();
-            var box = cls.getCurrentBox();
-            if (box != null) {
-                box.fixCoordinates();
-                if (cls.tmpBox != null) {
-                    cls.boxes.push(cls.tmpBox);
-                    cls.tmpBox = null;
-                    let ev = new CustomEvent('box-added', { detail: (cls.boxes.length - 1) });
-                    cls.element.dispatchEvent(ev);
-                }
-            }
-
-            cls.mousedown = null;
-            cls.selected = new SelectedArea();
-            // redraw clearing selection
-            cls.redraw();
+            cls.clearSelection();
         }
 
         // The mouse is moved outside of the canvas.
@@ -174,10 +177,13 @@ class BoxContainer {
             if (cls.mousedown == null) { return; }
             e.preventDefault();
             e.stopPropagation();
-            cls.mousedown = null;
-            cls.tmpBox = null;
-            cls.SelectedArea = new SelectedArea();
-            cls.redraw();
+            // Remove a box that's being created.
+            if (cls.isCreatingBox) {
+                cls.removeSelectedBox();
+            } else {
+                // else just clear the selection.
+                cls.clearSelection();
+            }
         }
 
         // The mouse is moved inside the element.
@@ -191,9 +197,9 @@ class BoxContainer {
             var position = new Point(e.offsetX, e.offsetY);
             var box = cls.getCurrentBox();
             if (box != null) {
-                if (cls.tmpBox != null) {
-                    cls.tmpBox.x2 = position.x;
-                    cls.tmpBox.y2 = position.y;
+                if (cls.isCreatingBox) {
+                    box.x2 = position.x;
+                    box.y2 = position.y;
                 } else {
                     var offset = position.sub(cls.mousedown);
                     box.move(cls.selected.position, offset);
@@ -213,8 +219,6 @@ class BoxContainer {
                         cls.boxes.splice(cls.selected.boxId, 1);
                         let ev = new CustomEvent('box-removed', { detail: cls.selected.boxId });
                         cls.element.dispatchEvent(ev);
-                    } else if (cls.tmpBox != null) {
-                        cls.tmpBox = null;
                     }
                     cls.mousedown = null;
                     cls.selected = new SelectedArea();
