@@ -1,10 +1,10 @@
-// Classes to manage drawing rectangles on an HTML canvas,
-// And drag/resize/remove them
+/* exported BoxContainer */
 /**
+ * Classes to manage drawing rectangles on an HTML canvas,
+ * And drag/resize/remove them.
  * TODO List:
  * - Better box labels
  */
-
 /**
  * BoxContainer manages drawing, dragging, resizing rectangles over
  * an image, in an html canvas.
@@ -17,8 +17,7 @@ class BoxContainer {
      * 
      * @param {string} id the id of the canvas element
      * @param {string} imgurl The url of the image to use as a canvas background.
-     * @param {*} lineOffset The size of the rectangle walls. 4 by default.
-     * @returns {BoxContainer}
+     * @param {number} lineOffset The size of the rectangle walls. 4 by default.
      */
     constructor(id, imgurl, lineOffset = 4) {
         this.boxes = [];
@@ -28,10 +27,10 @@ class BoxContainer {
             // TODO: error handling
             return;
         }
-        this.context = this.element.getContext('2d');
+        this.context = this.element.getContext("2d");
         this.lineOffset = lineOffset;
         this.lineWidth = Math.ceil(lineOffset / 2);
-        this.color = 'lightgrey';
+        this.color = "lightgrey";
         this.selected = new SelectedArea();
         this.mousedown = null;
         // Load and draw image
@@ -43,7 +42,6 @@ class BoxContainer {
 
     /**
      * Re-draws the image and the rectangles in the canvas.
-     * @returns null
      */
     redraw() {
         if (!this.element) {
@@ -54,10 +52,10 @@ class BoxContainer {
         this.context.drawImage(this.image, 0, 0);
         this.context.beginPath();
         for (var i = 0; i < this.boxes.length; i++) {
-            var overrideColor = '';
+            var overrideColor = "";
             var box = this.boxes[i];
             if (i == this.selected.boxId) {
-                overrideColor = 'cadetblue';
+                overrideColor = "cadetblue";
             }
             box.drawOn(this.context, i + 1, overrideColor);
         }
@@ -65,9 +63,9 @@ class BoxContainer {
 
     /**
      * Get the current box into this.selected, or create a new tmpbox. Then return it.
-     * @param {int} x The x coordinate of the point at which to select (optional)
-     * @param {int} y The y coordinate of the point at which to select (optional)
-     * @returns Box
+     * @param {number} x The x coordinate of the point at which to select (optional)
+     * @param {number} y The y coordinate of the point at which to select (optional)
+     * @return {Box}
      */
     getCurrentBox(x = -1, y = -1) {
         // First let's check if we have a selected box. If we do, return that.
@@ -82,9 +80,9 @@ class BoxContainer {
         var point = new Point(x, y);
         for (var i = 0; i < this.boxes.length; i++) {
             var position = this.boxes[i].getPosition(point);
-            if (position != 'o') {
+            if (position != "o") {
                 this.selected = new SelectedArea(i, position);
-                return this.boxes[i]
+                return this.boxes[i];
             }
         }
         // No boxes were found. We're creating a new one. Let's generate it, and make
@@ -93,16 +91,16 @@ class BoxContainer {
         this.addBox(point, 0, 0);
         this.isCreatingBox = true;
         // We've selected the new box, and we're dragging it from the bottom right.
-        this.selected = new SelectedArea(this.boxes.length - 1, 'se');
+        this.selected = new SelectedArea(this.boxes.length - 1, "se");
         // Now return it.
         return this.boxes[this.selected.boxId];
-    };
+    }
 
     /**
      * Add a box of given dimensions at a specific point.
      * @param {Point} center The center of the box to add
-     * @param {int} w the width of the box
-     * @param {int} l the length of the box
+     * @param {number} w the width of the box
+     * @param {number} l the length of the box
      */
     addBox(center, w, l) {
         var hw = Math.ceil(w / 2);
@@ -112,7 +110,7 @@ class BoxContainer {
             center.x + hw, center.y + hl,
             this.lineWidth, this.lineOffset, this.color);
         this.boxes.push(box);
-        let ev = new CustomEvent('box-added', { detail: (this.boxes.length - 1) });
+        let ev = new CustomEvent("box-added", { detail: (this.boxes.length - 1) });
         this.element.dispatchEvent(ev);
         this.redraw();
     }
@@ -148,7 +146,7 @@ class BoxContainer {
 
     /**
      * Event handler for mouse being clicked.
-     * @param {event} e
+     * @param {Event} e
      * @private
      */
     mouseDown(e) {
@@ -165,7 +163,7 @@ class BoxContainer {
     }
     /**
      * Event handler for mouse being released.
-     * @param {event} e
+     * @param {Event} e
      * @private
      */
     mouseUp(e) {
@@ -178,7 +176,7 @@ class BoxContainer {
 
     /**
      * Event handler for the mouse exiting the canvas.
-     * @param {event} e
+     * @param {Event} e
      * @private
      */
     mouseOut(e) {
@@ -196,7 +194,7 @@ class BoxContainer {
 
     /**
      * Event handler for the mouse moving on the canvas.
-     * @param {event} e
+     * @param {Event} e
      * @private
      */
     mouseMove(e) {
@@ -226,7 +224,7 @@ class BoxContainer {
 
     /**
      * Event handler for keypress.
-     * @param {event} e
+     * @param {Event} e
      * @private
      */
     keyPress(e) {
@@ -234,13 +232,13 @@ class BoxContainer {
         if (e.key == "Escape") {
             this.removeSelectedBox();
             this.setCursorStyle(e);
-        };
+        }
     }
 
 
     /**
      * Set the style of the mouse cursor.
-     * @param {event} e
+     * @param {Event} e
      * @private
      */
     setCursorStyle(e) {
@@ -253,7 +251,7 @@ class BoxContainer {
         var point = new Point(e.offsetX, e.offsetY);
         for (var i = 0; i < this.boxes.length; i++) {
             let position = this.boxes[i].getPosition(point);
-            if (position != 'o') {
+            if (position != "o") {
                 this._setMouseStyle(position);
                 // We break out as the first box matching will also be
                 // the one selected if the user clicks.
@@ -261,7 +259,7 @@ class BoxContainer {
             }
         }
         // We found no match.
-        this._setMouseStyle('o');
+        this._setMouseStyle("o");
     }
 
     /**
@@ -269,17 +267,17 @@ class BoxContainer {
      * @private
      */
     _setMouseStyle(position) {
-        var mouseStyle = 'default';
+        var mouseStyle = "default";
         switch (position) {
-            case 'i':
+            case "i":
                 if (this.mousedown !== null) {
-                    mouseStyle = 'move';
+                    mouseStyle = "move";
                 }
                 break;
-            case 'o':
+            case "o":
                 break;
             default:
-                mouseStyle = position + '-resize';
+                mouseStyle = position + "-resize";
                 break;
         }
         this.element.style.cursor = mouseStyle;
@@ -292,7 +290,7 @@ class BoxContainer {
     removeSelectedBox() {
         if (this.selected.inBox()) {
             this.boxes.splice(this.selected.boxId, 1);
-            let ev = new CustomEvent('box-removed', { detail: this.selected.boxId });
+            let ev = new CustomEvent("box-removed", { detail: this.selected.boxId });
             this.element.dispatchEvent(ev);
         }
         this.clearSelection();
@@ -335,11 +333,12 @@ class Box {
         this.lineOffset = lineOffset;
         this.lineWidth = lineWidth;
         this.color = color;
+        this.center = this.computeCenter();
     }
 
     /**
-     * Return the data for the box, but in terms of center/width/height.
-     * @returns {object} A simple k-v representation of the box.
+     * Provide the data for the box, but in terms of center/width/height.
+     * @return {Object} A simple k-v representation of the box.
      */
     dimensions() {
         this.fixCoordinates();
@@ -350,10 +349,17 @@ class Box {
     /**
      * Draw the box onto a canvas
      * @param {CanvasRenderingContext2D} context the drawing context
+     * @param {string} tag A tag to draw at the center of the box
+     * @param {string} overrideColor An optional color to apply to the rectangle
      */
-    drawOn(context, tag, overrideColor = '') {
+    drawOn(context, tag, overrideColor = "") {
         var anchorSize = Math.ceil(this.lineOffset / 2);
         var lo = this.lineOffset;
+        /**
+         * Draw one of the handles
+         * @param {number} x 
+         * @param {number} y 
+         */
         function fillRect(x, y) {
             context.fillRect(x - anchorSize, y - anchorSize, lo, lo);
         }
@@ -373,31 +379,31 @@ class Box {
         fillRect(this.x2, this.center.y);
         fillRect(this.x2, this.y2);
         context.font = "bold 15px sans-serif";
-        context.fillText(tag, this.center.x, this.center.y)
+        context.fillText(tag, this.center.x, this.center.y);
     }
 
     /**
      * Find where is the point with respect to the box.
      * @param {Point} p the point we're evaluating our position against.
-     * @returns {string} the position
+     * @return {string} the position
      */
     getPosition(p) {
-        var position = '';
+        var position = "";
         // Note: this could be made slightly more efficient,
         // at the cost of readability.
         if (this.isLeft(p)) {
-            position = 'w';
+            position = "w";
         } else if (this.isRight(p)) {
-            position = 'e';
+            position = "e";
         }
         var isInHandle = position || this.isXcentered(p);
         // If a match was found, we also want to find the vertical
         // position.
         if (isInHandle) {
             if (this.isTop(p)) { // Top 3 handles
-                return 'n' + position;
+                return "n" + position;
             } else if (this.isBottom(p)) { // Bottom 3 handles
-                return 's' + position;
+                return "s" + position;
             }
         }
         if (position && this.isYcentered(p)) { // Left and Right handle
@@ -406,9 +412,9 @@ class Box {
         // We're not in a handle, let's check if we're inside or outside the rectangle.
         if (this.isInside(p)) {
             // if we're inside the figure, but nowhere near a handle.
-            return 'i';
+            return "i";
         }
-        return 'o';
+        return "o";
     }
 
     /**
@@ -418,26 +424,27 @@ class Box {
      */
     move(position, offset) {
         // Dragging
-        if (position == 'i') {
+        if (position == "i") {
             this.x1 += offset.x;
             this.x2 += offset.x;
             this.y1 += offset.y;
             this.y2 += offset.y;
         } else {
             // left or right shift
-            if (position.includes('w')) {
+            if (position.includes("w")) {
                 this.x1 += offset.x;
-            } else if (position.includes('e')) {
+            } else if (position.includes("e")) {
                 this.x2 += offset.x;
             }
             // top or bottom shift
-            if (position.includes('n')) {
+            if (position.includes("n")) {
                 this.y1 += offset.y;
-            } else if (position.includes('s')) {
+            } else if (position.includes("s")) {
                 this.y2 += offset.y;
             }
         }
-        // we mainly want to calculate the new center.
+        // we mainly want to calculate the new center,
+        // but checking coordinates correctness doesn't hurt.
         this.fixCoordinates();
     }
     /** "Private" methods */
@@ -450,22 +457,30 @@ class Box {
      * @private
      */
     fixCoordinates() {
+        var swap = this.x1;
         if (this.x1 > this.x2) {
-            var swap = this.x1;
             this.x1 = this.x2;
             this.x2 = swap;
         }
         if (this.y1 > this.y2) {
-            var swap = this.y1;
+            swap = this.y1;
             this.y1 = this.y2;
             this.y2 = swap;
         }
-        this.center = new Point((this.x1 + this.x2) / 2, (this.y1 + this.y2) / 2);
+        this.center = this.computeCenter();
+    }
+
+    /**
+     * Computes the center of the image.
+     * @return {Point} the center point
+     */
+    computeCenter() {
+        return new Point((this.x1 + this.x2) / 2, (this.y1 + this.y2) / 2);
     }
 
     /**
      * @param {Point} p The point to check
-     * @returns bool
+     * @return {bool}
      * @private
      */
     isLeft(p) {
@@ -474,7 +489,7 @@ class Box {
 
     /**
      * @param {Point} p The point to check
-     * @returns bool
+     * @return {bool}
      * @private
      */
     isRight(p) {
@@ -483,7 +498,7 @@ class Box {
 
     /**
      * @param {Point} p The point to check
-     * @returns bool
+     * @return {bool}
      * @private
      */
     isTop(p) {
@@ -492,7 +507,7 @@ class Box {
 
     /**
      * @param {Point} p The point to check
-     * @returns bool
+     * @return {bool}
      * @private
      */
     isBottom(p) {
@@ -501,7 +516,7 @@ class Box {
 
     /**
      * @param {Point} p The point to check
-     * @returns bool
+     * @return {bool}
      * @private
      */
     isXcentered(p) {
@@ -510,7 +525,7 @@ class Box {
 
     /**
      * @param {Point} p The point to check
-     * @returns bool
+     * @return {bool}
      * @private
      */
     isYcentered(p) {
@@ -519,7 +534,7 @@ class Box {
 
     /**
      * @param {Point} p The point to check
-     * @returns bool
+     * @return {bool}
      * @private
      */
     isInside(p) {
@@ -534,17 +549,17 @@ class Box {
 class SelectedArea {
     /**
      * 
-     * @param {int} boxId the index of the selected box.
+     * @param {number} boxId the index of the selected box.
      * @param {string} pos the position at which the box was selected.
      */
-    constructor(boxId = -1, pos = 'o') {
+    constructor(boxId = -1, pos = "o") {
         this.boxId = boxId;
         this.position = pos;
     }
 
     /**
      * Checks if a box is selected.
-     * @returns boolean
+     * @return boolean
      */
     inBox() {
         return (this.boxId > -1);
@@ -563,7 +578,7 @@ class Point {
     /**
      * Subtracts points. This works as a vector subtraction.
      * @param {Point} p the point to subtract.
-     * @returns 
+     * @return 
      */
     sub(p) {
         return new Point(this.x - p.x, this.y - p.y);

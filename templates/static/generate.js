@@ -1,3 +1,5 @@
+/* exported memeCheckAndSubmit saveHook removeHook */
+
 function memeSubmit(container, gif) {
     var toSubmit = { "from": gif, "texts": [], "boxes": [] };
     for (var i = 0; i < container.boxes.length; i++) {
@@ -29,18 +31,17 @@ function memeCheckAndSubmit(container, gif) {
             memeSubmit(container, gif);
             addToForm(container);
         }
-    }
+    };
 }
 
 function addToForm(container) {
     var textBoxContainer = document.getElementById("text-boxes");
     for (var i = 0; i < container.boxes.length; i++) {
         let data = container.boxes[i].dimensions();
-        let tid = "box-" + i;
         let input = document.createElement("input");
-        input.type = 'hidden';
+        input.type = "hidden";
         input.name = "box";
-        input.value = '' + data.x + '|' + data.y + '|' + data.w + '|' + data.l;
+        input.value = "" + data.x + "|" + data.y + "|" + data.w + "|" + data.l;
         textBoxContainer.appendChild(input);
     }
 }
@@ -68,21 +69,21 @@ function removeHook(container) {
         // Shift the textarea values, then remove the last
         // text area.
         var id = e.detail;
-        var prevElement = document.getElementById("text-box-" + id).getElementsByTagName("input")[0]
+        var prevElement = document.getElementById("text-box-" + id).getElementsByTagName("input")[0];
         // We still have container.boxes.length + 1 text areas.
         for (let i = id + 1; i <= container.boxes.length; i++) {
-            var curElement = document.getElementById("text-box-" + i).getElementsByTagName("input")[0]
+            var curElement = document.getElementById("text-box-" + i).getElementsByTagName("input")[0];
             prevElement.value = curElement.value;
             prevElement = curElement;
         }
         document.getElementById("text-box-" + container.boxes.length).remove();
-    }
+    };
 }
 
 var saveHook = function (e) {
     var id = e.detail;
     var textBoxContainer = document.getElementById("text-boxes");
-    addTextBox(textBoxContainer, 'text-box-' + id, id + 1);
-}
+    addTextBox(textBoxContainer, "text-box-" + id, id + 1);
+};
 
 
