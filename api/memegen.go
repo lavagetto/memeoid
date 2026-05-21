@@ -23,7 +23,6 @@ import (
 	"html/template"
 	"image/gif"
 	"image/jpeg"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path"
@@ -63,7 +62,7 @@ func (h *MemeHandler) LoadTemplates(basepath string) {
 // allGifs returns a list of all gifs
 func (h *MemeHandler) allGifs() (*[]string, error) {
 	var gifs []string
-	files, err := ioutil.ReadDir(h.ImgPath)
+	files, err := os.ReadDir(h.ImgPath)
 	if err != nil {
 		return nil, err
 	}
@@ -94,14 +93,8 @@ func (h *MemeHandler) htmlBanner(gifs *[]string, w http.ResponseWriter) {
 	}
 }
 
-func (h *MemeHandler) getImageFromRequest(w http.ResponseWriter, r *http.Request) string {
-	// vars := mux.Vars(r)
-	// imageName, ok := vars["from"]
-	// if !ok {
-	// 	http.Error(w, "missing 'from' parameter", http.StatusBadRequest)
-	// 	return ""
-	// }
-	imageName := r.FormValue("from")
+func (h *MemeHandler) getImageFromRequest(w http.ResponseWriter, input map[string]string) string {
+	imageName := input["from"]
 	if imageName == "" {
 		http.Error(w, "missing 'from' parameter", http.StatusBadRequest)
 		return ""
@@ -117,7 +110,8 @@ func (h *MemeHandler) getImageFromRequest(w http.ResponseWriter, r *http.Request
 
 // Form returns a form that will generate the meme
 func (h *MemeHandler) Form(w http.ResponseWriter, r *http.Request) {
-	imageName := h.getImageFromRequest(w, r)
+	input := map[string]string{"from": r.FormValue("from")}
+	imageName := h.getImageFromRequest(w, input)
 	if imageName == "" {
 		return
 	}
@@ -174,7 +168,9 @@ func (h *MemeHandler) saveImage(g *gif.GIF, path string) error {
 // MemeFromRequest generates a meme image from a request, and saves it to disk. Then sends a
 // 301 to the user.
 func (h *MemeHandler) MemeFromRequest(w http.ResponseWriter, r *http.Request) {
-	imageName := h.getImageFromRequest(w, r)
+	input := map[string]string{"from": r.FormValue("from")}
+
+	imageName := h.getImageFromRequest(w, input)
 	if imageName == "" {
 		return
 	}
@@ -228,9 +224,8 @@ func (h *MemeHandler) memeExists(uid string) bool {
 
 // Preview returns a thumbnail, in jpeg format
 func (h *MemeHandler) Preview(w http.ResponseWriter, r *http.Request) {
-	fmt.Printf("In preview!")
 	vars := mux.Vars(r)
-	imageName := h.getImageFromRequest(w, r)
+	imageName := h.getImageFromRequest(w, vars)
 	if imageName == "" {
 		http.Error(w, "Image not found", http.StatusNotFound)
 		return
@@ -246,12 +241,12 @@ func (h *MemeHandler) Preview(w http.ResponseWriter, r *http.Request) {
 	imgFullPath := path.Join(h.ImgPath, imageName)
 	tpl, err := img.SimpleTemplate(imgFullPath, h.FontName, 52.0, 8.0)
 	if err != nil {
-		http.Error(w, "error generating the thumbnail", http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("error generating the thumbnail: %v", err), http.StatusInternalServerError)
 		return
 	}
 	g, err := tpl.GetGif()
 	if err != nil {
-		http.Error(w, "error generating the thumbnail", http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("error generating the thumbnail: %v", err), http.StatusInternalServerError)
 		return
 	}
 	m := img.Meme{Gif: g}

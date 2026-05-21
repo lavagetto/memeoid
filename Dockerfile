@@ -1,24 +1,21 @@
-FROM golang:buster AS build
+FROM golang:trixie AS build
 COPY . /src
 RUN cd /src && go mod vendor && GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo -ldflags="-w -s" .
 
 # We're accepting the MS corefonts EULA implicitly.
 # TODO: add a way to dynamically accept before build? Or at least a warning.
-FROM debian:buster AS fonts
-RUN echo 'deb http://deb.debian.org/debian buster contrib non-free' > /etc/apt/sources.list.d/extra.list \
+FROM debian:trixie-slim AS fonts
+RUN echo 'deb http://deb.debian.org/debian trixie contrib non-free' > /etc/apt/sources.list.d/extra.list \
     && apt-get update \
     && echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" | debconf-set-selections \
     &&  apt-get install -y ttf-mscorefonts-installer
 
-FROM debian:buster
+FROM debian:trixie
 ENV USER=application
 ENV UID=1000
 
-# See https://stackoverflow.com/a/55757473/12429735RUN
-RUN adduser \
-    --disabled-password \
-    --gecos "" \
-    --home "/nonexistent" \
+RUN useradd \
+    --home-dir "/nonexistent" \
     --shell "/sbin/nologin" \
     --no-create-home \
     --uid "${UID}" \
