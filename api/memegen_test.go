@@ -2,7 +2,7 @@ package api
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -24,7 +24,7 @@ type MemeGenTestSuite struct {
 }
 
 func (s *MemeGenTestSuite) SetupSuite() {
-	tempdir, err := ioutil.TempDir("", "memeoid-api")
+	tempdir, err := os.MkdirTemp("", "memeoid-api")
 	if err != nil {
 		panic(err)
 	}
@@ -99,7 +99,7 @@ func (s *MemeGenTestSuite) TestListGifs() {
 			}
 			if tc.Body != "" {
 				defer response.Body.Close()
-				body, err := ioutil.ReadAll(response.Body)
+				body, err := io.ReadAll(response.Body)
 				s.Nil(err)
 				s.Equal(tc.Body, string(body))
 			}

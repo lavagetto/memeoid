@@ -5,7 +5,7 @@ usage() {
     cat << EOF
     Usage: GIFDIR=<dir> MEMEDIR=<dir> $0
 
-    Runs memeoid. Behaviour is controlled by the following environment 
+    Runs memeoid. Behaviour is controlled by the following environment
     variables:
 
     * GIFDIR is the directory where the originals are contained
@@ -31,6 +31,8 @@ chown -R $UID $M
 MSG="Launching memeoid on :$PORT, using '$G' as a gif source"
 if which cowsay > /dev/null; then
     cowsay "$MSG"
+elif [[ -x /usr/games/cowsay ]]; then
+    /usr/games/cowsay "$MSG"
 else
     echo "Please install `cowsay` for a better user experience."
     echo "$MSG"
